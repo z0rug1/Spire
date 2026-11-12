@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Spire</title>
+<meta name="description" content="Spire: a one-thumb climbing adventure up a single colossal tower.">
+<meta name="theme-color" content="#0f1512">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="hud-top">
+    <div id="alt"><span id="alt-m">0</span><span class="unit"> m</span><small id="alt-d">The Roots</small></div>
+    <div id="hud-right">
+      <span id="chalk" title="Chalk">&#9670; <b id="chalk-n">0</b></span>
+      <button id="btn-pause" class="round" aria-label="Pause"><i></i><i></i></button>
+    </div>
+  </div>
+  <div id="toast" role="status"></div>
+  <div id="hud-bottom">
+    <button id="btn-piton" class="pill" aria-label="Place piton">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20 L13 5 L16 7 Z" fill="currentColor"/><circle cx="17" cy="5" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      <b id="piton-n">2</b>
+    </button>
+    <button id="btn-camp" class="pill hidden">Camp</button>
+  </div>
+</div>
+
+<div id="dialogue" class="hidden">
+  <div class="sheet">
+    <div class="who" id="dlg-who"></div>
+    <p id="dlg-text"></p>
+    <div id="dlg-choices"></div>
+    <div class="next" id="dlg-next">tap to continue</div>
+  </div>
+</div>
+
+<div id="panel" class="overlay hidden"><div class="card" id="panel-card"></div></div>
+
+<div id="title" class="overlay">
+  <div class="title-box">
+    <h1>SPIRE</h1>
+    <p class="tag">One tower. Nearly eight kilometres. One thumb.</p>
+    <button id="btn-continue" class="btn primary hidden">Continue</button>
+    <button id="btn-new" class="btn primary">Begin the climb</button>
+    <div class="toggles">
+      <button id="set-aim" class="chip"></button>
+      <button id="set-sound" class="chip"></button>
+      <button id="set-fs" class="chip"></button>
+    </div>
+    <p class="fine">Hold your phone upright. Progress is saved on this device.</p>
+  </div>
+</div>
+
+<div id="rotate"><p>Turn your phone upright to climb.</p></div>
+<div id="fade"></div>
+
+<script src="js/core.js"></script>
+<script src="js/story.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/render.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

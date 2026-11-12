@@ -1,0 +1,12 @@
+{
+  "name": "Spire",
+  "short_name": "Spire",
+  "description": "A one-thumb climbing adventure up a single colossal tower.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0a0d0c",
+  "theme_color": "#0f1512",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
