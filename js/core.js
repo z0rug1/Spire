@@ -15,10 +15,11 @@
     GRAB_SPEED: 1050,  // falling faster than this, you cannot catch a hold
     FALL_DEATH: 720,   // drop below your last apex that ends the attempt
     VTERM: 1500,
-    ST_MAX: 100, ST_DRAIN: 6, ST_LEAP: 5, ST_REST: 45, ST_GLIDE: 9, ST_GRAPPLE: 6,
+    ST_MAX: 100, ST_DRAIN: 9, ST_LEAP: 7, ST_REST: 36, ST_GLIDE: 12, ST_GRAPPLE: 8,
+    THIN: [1, 1.15, 1.3, 1.5],   // grip drains faster in each district: the air thins as you climb
     GRAPPLE_R: 250, ZIP_SPEED: 1500,
     GLIDE_FALL: 80, GLIDE_EASE: 3.2, GLIDE_VX: 240, UPDRAFT_V: 330,
-    CRUMBLE_T: 1.1, CRUMBLE_BACK: 3.5,
+    CRUMBLE_T: 0.9, CRUMBLE_BACK: 3.5,
     SPRING_V: 880,     // launch speed off a bounce cap
     TUBE_V: 600,       // exit speed from a pneumatic tube
     SHARD_R: 24,
@@ -32,9 +33,9 @@
       kinds: { leap: 10, crumble: 2, spring: 3 } },
     { key: 'works', name: 'The Works', nodes: [10, 12], dy: [64, 125], margin: 0.76, restEvery: 3,
       kinds: { leap: 8, crumble: 2, moving: 3, vent: 4, grapple: 3, tube: 3, lift: 3, drip: 5 }, intro: 'grapple' },
-    { key: 'gardens', name: 'The Gardens', nodes: [11, 13], dy: [66, 135], margin: 0.80, restEvery: 3,
+    { key: 'gardens', name: 'The Gardens', nodes: [11, 13], dy: [66, 135], margin: 0.80, restEvery: 4,
       kinds: { leap: 6, slick: 3, wind: 3, updraft: 3, grapple: 2, moving: 2, crumble: 1, spring: 3, phase: 3, bird: 5 }, intro: 'updraft' },
-    { key: 'crown', name: 'The Crown', nodes: [11, 13], dy: [70, 145], margin: 0.84, restEvery: 3,
+    { key: 'crown', name: 'The Crown', nodes: [11, 13], dy: [70, 145], margin: 0.84, restEvery: 4,
       kinds: { leap: 5, plate: 4, eplate: 3, grapple: 2, updraft: 2, vent: 2, moving: 2, crumble: 2, phase: 3, lift: 3, tube: 3, drone: 5 }, intro: 'plate' }
   ];
   var SEGS = 4; // segments (camp to camp) per district in the main tower
@@ -50,7 +51,7 @@
   S.DAILY_PLAN = [{ d: 0, n: 7 }, { d: 1, n: 8, intro: true }, { d: 2, n: 8, intro: true }, { d: 3, n: 8, intro: true }];
   // Daily towers are seeded by the local date. DAILY_SALT lists the dates whose first seed
   // produced a gap the test climber could not cross (see tests/verify.js --daily).
-  S.DAILY_SALT = { 20261223: 1, 20270210: 1, 20270824: 1 };
+  S.DAILY_SALT = { 20270512: 1, 20270805: 1, 20280424: 1 };
   S.dateKey = function (d) { d = d || new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
   S.dailySeed = function (key) { return (Math.imul(key, 2654435761) + (S.DAILY_SALT[key] || 0) * 7919) >>> 0; };
 
@@ -62,7 +63,7 @@
     if (L % 5 === 4) {
       sp.set = ['slag', 'storm', 'alt', 'dark'][Math.floor(L / 5) % 4];
       sp.d = { slag: 1, storm: 2, alt: 3, dark: 0 }[sp.set];
-      sp.riseSpeed = 22 + 10 * hard;
+      sp.riseSpeed = 25 + 10 * hard;
     }
     return sp;
   };
@@ -400,7 +401,7 @@
           advance(an);
           ledgeAt(180 + sd * R(50, 70), cur.y + R(80, 88), 30);
         }
-        rise = { id: W.rises.length, yTrig: trig.y, yEnd: 0, speed: sp.riseSpeed || 22, lead: 260 };
+        rise = { id: W.rises.length, yTrig: trig.y, yEnd: 0, speed: sp.riseSpeed || 25, lead: 260 };
         W.rises.push(rise);
       } else if (sp.set === 'storm') {
         // The Thermal Ladder: ride three updrafts in a row without landing, twice.
@@ -725,6 +726,11 @@
     return false;
   }
 
+  // How much faster grip drains on hold h. The story and daily towers go by district; the endless
+  // wall cycles through districts, so there it grows with height instead.
+  function thin(W, h) { return W.endless ? 1 + 0.45 * Math.min(1, h.seg / 20) : C.THIN[h.d]; }
+  S.thin = thin;
+
   function step(sim, dt) {
     var p = sim.p, W = sim.world, i, list, h;
     sim.t += dt;
@@ -752,12 +758,12 @@
       if (h.type === 'moving') p.x = holdX(h, t);
       else if (h.type === 'lift') { p.x = holdX(h, t); p.y = holdY(h, t); }
       if (h.type === 'ledge' || h.type === 'camp') {
-        p.stamina = Math.min(sim.mods.stMax, p.stamina + C.ST_REST * dt);
+        p.stamina = Math.min(sim.mods.stMax, p.stamina + C.ST_REST * (h.type === 'camp' ? 2 : 1) * dt);
       } else {
-        p.stamina -= C.ST_DRAIN * sim.mods.drain * (h.type === 'slick' ? 2.5 : 1) * dt;
+        p.stamina -= C.ST_DRAIN * thin(W, h) * sim.mods.drain * (h.type === 'slick' ? 2.5 : 1) * dt;
         if (p.stamina <= 0) {
           detach(sim); p.vx = 0; p.vy = -30; p.noGrabT = t + 0.5;
-          p.stamina = p.secondWind ? 22 : 6; p.secondWind = false;
+          p.stamina = p.secondWind ? 15 : 5; p.secondWind = false;
           ev(sim, 'slip'); return;
         }
       }

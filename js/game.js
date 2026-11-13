@@ -521,8 +521,8 @@
       '<div><b>' + run.falls + '</b><span>Falls</span></div>' +
       '<div><b>' + metres(world.top) + ' m</b><span>Height</span></div></div>' +
       '<p>' + note + '</p><p>Everyone gets the same tower on the same date, at the same base stats, so times can be compared.</p>' +
-      '<button class="btn primary" data-act="daily-again">Run it again</button>' +
-      '<button class="btn" data-act="daily-quit">Back to title</button>');
+      '<button class="btn primary" data-act="run-again">Run it again</button>' +
+      '<button class="btn" data-act="run-quit">Back to title</button>');
   }
   function ghostAt() {
     if (!run || run.kind !== 'daily' || !run.started || run.done || !daily.ghost) return null;

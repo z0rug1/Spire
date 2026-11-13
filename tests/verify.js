@@ -7,6 +7,7 @@
    node tests/verify.js --endless 60  also check the first 60 segments of the endless climb */
 'use strict';
 const S = require('../js/core.js');
+require('../js/story.js');
 const C = S.C;
 const args = process.argv.slice(2);
 const verbose = args.includes('-v');
@@ -97,20 +98,47 @@ function climb(world, opt) {
     return null;
   }
 
-  const res = { ok: false, leaps: 0, tight: [], minLand: 1e9, ways: [], waited: 0, sim };
+  const res = { ok: false, leaps: 0, tight: [], minLand: 1e9, ways: [], waited: 0, sim, bought: [], chalk: 0 };
   const summit = world.camps[world.camps.length - 1].hold;
+  // opt.think: seconds the climber spends aiming on every hold (a bot decides instantly, a person does not).
+  // opt.shop: spend the chalk picked up along the way on upgrades at each camp, in a sensible order.
+  const think = opt.think || 0, upg = { lungs: 0, legs: 0, hands: 0, sling: 0 };
+  const ORDER = ['hands', 'lungs', 'hands', 'lungs', 'legs', 'hands', 'lungs', 'legs', 'hands', 'lungs', 'legs', 'legs'];
+  let chalk = 0, oi = 0, lastShop = -1;
+  const collect = () => { for (const e of sim.events) if (e.type === 'shard') { chalk += e.a; res.chalk += e.a; } sim.events.length = 0; };
+  const shop = camp => {
+    while (oi < ORDER.length) {
+      const u = S.Story.upgrades.find(x => x.id === ORDER[oi]), cost = u.costs[upg[u.id]];
+      if (cost == null) { oi++; continue; }
+      if (chalk < cost) break;
+      chalk -= cost; upg[u.id]++; oi++; res.bought.push(`${u.id} ${upg[u.id]} at camp ${camp}`);
+    }
+    sim.mods.stMax = C.ST_MAX + 20 * upg.lungs; sim.mods.vmax = C.VMAX * (1 + 0.05 * upg.legs); sim.mods.drain = 1 - 0.15 * upg.hands;
+  };
   while (sim.p.hold !== summit) {
     const h = world.holds[sim.p.hold];
+    collect();
     if (!opt.allTools && h.type === 'camp' && h.camp > maxCamp) { maxCamp = h.camp; sim.tools = S.toolsFor(maxCamp); }
+    if (opt.shop && h.camp != null && h.camp !== lastShop) { lastShop = h.camp; shop(h.camp); }
     if ((h.type === 'ledge' || h.type === 'camp') && sim.p.stamina < sim.mods.stMax - 0.5) {
       S.step(sim, C.DT);
       if (sim.p.state !== 'hold') { res.stuck = `knocked off or caught while resting on #${h.id} (${h.type}, seg ${h.seg})`; return res; }
       continue;
     }
+    if (think > 0 && h.type !== 'ledge' && h.type !== 'camp') {
+      // nobody lingers on a hold that is about to vanish or go live
+      const hurry = h.type === 'phase' || h.type === 'crumble' || (h.type === 'plate' && h.elec);
+      const n = Math.round((hurry ? 0 : think) / C.DT);
+      for (let i = 0; i < n && sim.p.state === 'hold'; i++) S.step(sim, C.DT);
+      if (sim.p.state !== 'hold' || sim.p.hold !== h.id) {
+        res.stuck = `grip gave out while aiming on a ${h.type} in ${S.DISTRICTS[h.d].name} (segment ${h.seg}, ${Math.round(h.y * C.M_PER_UNIT)} m)`;
+        return res;
+      }
+    }
     const d = decide(sim);
     if (!d) {
       const next = mainHolds[h.main + 1];
-      res.stuck = `hold #${h.id} (${h.type}, seg ${h.seg}, y ${h.y.toFixed(0)}), grip ${sim.p.stamina.toFixed(0)}; next: ${next && next.type} at ${next && Math.round(next.x)},${next && Math.round(next.y)}`;
+      res.stuck = `${S.DISTRICTS[h.d].name}, segment ${h.seg}, ${Math.round(h.y * C.M_PER_UNIT)} m: hold #${h.id} (${h.type}, seg ${h.seg}, y ${h.y.toFixed(0)}), grip ${sim.p.stamina.toFixed(0)}; next: ${next && next.type} at ${next && Math.round(next.x)},${next && Math.round(next.y)}`;
       return res;
     }
     for (let i = 0; i < Math.round(d.wait / C.DT); i++) S.step(sim, C.DT);
@@ -129,8 +157,14 @@ function climb(world, opt) {
 /* ---------- main tower ---------- */
 const t0 = Date.now();
 const world = S.generate();
-const r = climb(world);
-if (!r.ok) { console.error('MAIN TOWER: STUCK at ' + r.stuck); process.exit(1); }
+// Three climbers. The expert aims in half a second and buys nothing: if they can finish, nobody can
+// get stuck for good. The average climber takes 1.6 s per hold: without upgrades they must fail (so
+// upgrades matter), and buying upgrades with the chalk found on the way they must finish.
+const EXPERT = 0.5, AVERAGE = 1.6;
+const r = climb(world, { think: EXPERT });
+if (!r.ok) { console.error('MAIN TOWER: an expert with no upgrades is STUCK at ' + r.stuck); process.exit(1); }
+const avgBare = climb(world, { think: AVERAGE, quiet: true });
+const avgShop = climb(world, { think: AVERAGE, shop: true, quiet: true });
 const count = {};
 world.holds.forEach(h => { count[h.type] = (count[h.type] || 0) + 1; });
 const chalk = world.shards.reduce((a, s) => a + s.v, 0);
@@ -146,6 +180,12 @@ console.log(`  gates (m)    : ${world.gates.map(g => Math.round(g * C.M_PER_UNIT
 console.log(`  leap leniency: median ${r.ways[r.ways.length >> 1]} launch options per leap, 10th percentile ${r.ways[Math.floor(r.ways.length * 0.1)]}; ${r.waited} leaps needed timing`);
 if (r.tight.length) { console.log(`  tight spots (${r.tight.length}):`); r.tight.forEach(t => console.log('    ' + t)); }
 console.log(`  checked in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+console.log('Balance:');
+console.log(`  expert, no upgrades          : finishes (lowest grip on landing ${r.minLand.toFixed(0)})`);
+console.log(`  average pace, no upgrades    : ${avgBare.ok ? 'FINISHES, so upgrades are not needed' : 'fails: ' + avgBare.stuck}`);
+console.log(`  average pace, buying upgrades: ${avgShop.ok ? `finishes (lowest grip on landing ${avgShop.minLand.toFixed(0)}, ${avgShop.chalk} chalk found, ${avgShop.bought.length} upgrades)` : 'FAILS: ' + avgShop.stuck}`);
+if (avgShop.bought.length) console.log('    bought: ' + avgShop.bought.join(', '));
+if (avgBare.ok || !avgShop.ok) process.exit(1);
 
 /* ---------- daily towers ---------- */
 const nDaily = +arg('--daily') || 0;
@@ -157,13 +197,13 @@ if (nDaily) {
   for (let i = 0; i < nDaily; i++, d.setDate(d.getDate() + 1)) {
     const key = S.dateKey(d);
     const w = S.generate(S.dailySeed(key), S.DAILY_PLAN, { noShards: true });
-    const rr = climb(w, { allTools: true, quiet: true });
+    const rr = climb(w, { allTools: true, quiet: true, think: EXPERT });
     if (rr.ok) { leaps += rr.leaps; height += w.top; continue; }
     // --salt: look for a salt that gives this date a climbable tower, to paste into DAILY_SALT in js/core.js
     let fixed = false;
     if (args.includes('--salt')) for (let salt = 1; salt < 10 && !fixed; salt++) {
       S.DAILY_SALT[key] = salt;
-      fixed = climb(S.generate(S.dailySeed(key), S.DAILY_PLAN, { noShards: true }), { allTools: true, quiet: true }).ok;
+      fixed = climb(S.generate(S.dailySeed(key), S.DAILY_PLAN, { noShards: true }), { allTools: true, quiet: true, think: EXPERT }).ok;
       if (fixed) salts[key] = salt;
     }
     if (!fixed) bad.push(key + ': ' + rr.stuck);
@@ -179,7 +219,7 @@ const nEnd = +arg('--endless') || 0;
 if (nEnd) {
   const t2 = Date.now();
   const w = S.endlessWorld(nEnd);
-  const re = climb(w, { allTools: true, quiet: !verbose });
+  const re = climb(w, { allTools: true, quiet: !verbose, think: EXPERT });
   if (!re.ok) { console.error(`Endless climb: STUCK at ${re.stuck}`); process.exit(1); }
   console.log(`Endless climb: first ${nEnd} segments climbable, ${Math.round(w.top * C.M_PER_UNIT)} m, ${re.leaps} leaps (${((Date.now() - t2) / 1000).toFixed(0)} s)`);
 }
