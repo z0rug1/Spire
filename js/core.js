@@ -31,11 +31,11 @@
     { key: 'roots', name: 'The Roots', nodes: [9, 11], dy: [58, 100], margin: 0.70, restEvery: 3,
       kinds: { leap: 10, crumble: 2, spring: 3 } },
     { key: 'works', name: 'The Works', nodes: [10, 12], dy: [64, 125], margin: 0.76, restEvery: 3,
-      kinds: { leap: 8, crumble: 2, moving: 3, vent: 4, grapple: 3, tube: 2, lift: 3 }, intro: 'grapple' },
+      kinds: { leap: 8, crumble: 2, moving: 3, vent: 4, grapple: 3, tube: 3, lift: 3, drip: 5 }, intro: 'grapple' },
     { key: 'gardens', name: 'The Gardens', nodes: [11, 13], dy: [66, 135], margin: 0.80, restEvery: 3,
-      kinds: { leap: 6, slick: 3, wind: 3, updraft: 3, grapple: 2, moving: 2, crumble: 1, spring: 3, phase: 3 }, intro: 'updraft' },
+      kinds: { leap: 6, slick: 3, wind: 3, updraft: 3, grapple: 2, moving: 2, crumble: 1, spring: 3, phase: 3, bird: 5 }, intro: 'updraft' },
     { key: 'crown', name: 'The Crown', nodes: [11, 13], dy: [70, 145], margin: 0.84, restEvery: 3,
-      kinds: { leap: 5, plate: 4, eplate: 3, grapple: 2, updraft: 2, vent: 2, moving: 2, crumble: 2, phase: 3, lift: 3, tube: 2 }, intro: 'plate' }
+      kinds: { leap: 5, plate: 4, eplate: 3, grapple: 2, updraft: 2, vent: 2, moving: 2, crumble: 2, phase: 3, lift: 3, tube: 3, drone: 5 }, intro: 'plate' }
   ];
   var SEGS = 4; // segments (camp to camp) per district in the main tower
 
@@ -50,7 +50,7 @@
   S.DAILY_PLAN = [{ d: 0, n: 7 }, { d: 1, n: 8, intro: true }, { d: 2, n: 8, intro: true }, { d: 3, n: 8, intro: true }];
   // Daily towers are seeded by the local date. DAILY_SALT lists the dates whose first seed
   // produced a gap the test climber could not cross (see tests/verify.js --daily).
-  S.DAILY_SALT = { 20270928: 1 };
+  S.DAILY_SALT = {};
   S.dateKey = function (d) { d = d || new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
   S.dailySeed = function (key) { return (Math.imul(key, 2654435761) + (S.DAILY_SALT[key] || 0) * 7919) >>> 0; };
 
@@ -98,6 +98,17 @@
   function plateWarn(h, t) { return !!h.elec && cyc(h, t) > h.period - 0.8; }
   function phaseOn(h, t) { return cyc(h, t) < h.on; }                      // a phase hold is solid while this is true
   function phaseWarn(h, t) { var c = cyc(h, t); return c < h.on && c > h.on - 0.6; }
+  // Moving hazards: slag drips, birds and patrol drones. Each is a pure function of time, so the
+  // aim preview and the test climber can see them coming.
+  function mobPos(m, t, o) {
+    var c;
+    if (m.kind === 'drip') { c = (t + m.ph) % m.period; o.on = c * m.v < m.fall; o.x = m.x; o.y = m.y - c * m.v; o.dir = 0; }
+    else if (m.kind === 'bird') { c = m.w * t + m.ph; o.on = true; o.x = 180 + 150 * Math.sin(c); o.y = m.y + 9 * Math.sin(c * 3.1); o.dir = Math.cos(c) >= 0 ? 1 : -1; }
+    else { c = m.w * t + m.ph; o.on = true; o.x = m.x; o.y = m.y + m.amp * Math.sin(c); o.dir = Math.cos(c) >= 0 ? 1 : -1; }
+    return o;
+  }
+  var MP = { x: 0, y: 0, on: false, dir: 0 };
+  S.mobPos = mobPos;
   S.holdX = holdX; S.holdY = holdY; S.ventOn = ventOn; S.ventWarn = ventWarn;
   S.plateOn = plateOn; S.plateWarn = plateWarn; S.phaseOn = phaseOn; S.phaseWarn = phaseWarn;
 
@@ -108,7 +119,7 @@
     function R(a, b) { return a + (b - a) * rnd(); }
     function RI(a, b) { return Math.floor(R(a, b + 1)); }
 
-    var W = { holds: [], vents: [], winds: [], drafts: [], shards: [], camps: [], anchors: [], springs: [], tubes: [],
+    var W = { holds: [], vents: [], winds: [], drafts: [], shards: [], camps: [], anchors: [], springs: [], tubes: [], mobs: [],
               gates: [], bands: [], sets: [], rises: [], segs: 0 };
     var mainIdx = 0, seg = 0, dist = 0;
 
@@ -163,15 +174,16 @@
         if (!ok(s[i][0], s[i][1], d[j][0], d[j][1], m)) return false;
       return true;
     }
-    function place(cur, type, m, dyR) {
+    function place(cur, type, m, dyR, minDx) {
       var t0 = top(cur), mm = m, h, i, c = cx(cur);
       if (cur.type === 'camp') mm = Math.min(0.92, m + 0.14);
       if (cur.type === 'moving' || type === 'moving' || type === 'lift') mm = Math.min(0.92, mm + 0.08);
       for (i = 0; i < 120; i++) {
         var dy = R(dyR[0], cur.type === 'camp' ? Math.min(dyR[1], 92) : dyR[1]) * (i > 60 ? 0.75 : 1);
         var x = cur.type === 'camp' ? R(120, 240) : R(34, 326);
-        if (cur.type !== 'camp' && Math.abs(x - c) < 36) continue;
+        if (cur.type !== 'camp' && Math.abs(x - c) < (i < 70 && minDx ? minDx : 36)) continue;
         h = mk(type, x, t0 + dy);
+        if (i < 90 && mobNear(cx(h), hy(h))) continue;
         if (reach(cur, h, mm)) return h;
       }
       return mk(type === 'moving' || type === 'lift' ? 'grip' : type, clamp(c + (c < 180 ? 64 : -64), 40, 320), t0 + 56);
@@ -186,6 +198,36 @@
         if (Math.abs(W.vents[i].y - y) < 34) return true;
       return false;
     }
+    // Would a hold at (x,y) sit in the path of a recently placed moving hazard?
+    function mobHits(m, x, y) {
+      if (m.kind === 'bird') return Math.abs(m.y - y) < 36;
+      if (Math.abs(m.x - x) > 34) return false;
+      return m.kind === 'drip' ? (y < m.y + 14 && y > m.y - m.fall - 12) : Math.abs(m.y - y) < m.amp + 22;
+    }
+    function mobNear(x, y) {
+      for (var i = Math.max(0, W.mobs.length - 3); i < W.mobs.length; i++) if (mobHits(W.mobs[i], x, y)) return true;
+      return false;
+    }
+    // A moving hazard across the leap from a to b. Skipped when it would also threaten a hold.
+    function mob(a, b, kind) {
+      var s = srcPts(a)[0], bx = cx(b), by = hy(b), mx = (s[0] + bx) / 2, my = (s[1] + by) / 2, m, i;
+      if (kind === 'bird') {
+        if (my - s[1] < 36 || by - my < 36) return;
+        m = { kind: kind, y: my, r: 11, w: R(0.9, 1.3), ph: R(0, 6.28) };
+      } else {
+        if (Math.abs(bx - s[0]) < 80) return;
+        // only as tall as the gap it guards, so it cannot reach the holds below or above the pair
+        if (kind === 'drip') m = { kind: kind, x: mx, y: Math.max(s[1], by) + 50, r: 10, v: 230, fall: Math.abs(by - s[1]) + 86, period: R(1.9, 2.5), ph: R(0, 3) };
+        else m = { kind: kind, x: mx, y: my, amp: Math.abs(by - s[1]) / 2 + 20, r: 13, w: R(1.3, 1.9), ph: R(0, 6.28) };
+      }
+      for (i = Math.max(0, W.holds.length - 12); i < W.holds.length; i++) {
+        var h = W.holds[i];
+        if (h.type === 'plate' || h.type === 'camp') { if (h.type === 'camp' && Math.abs(h.y - my) < 110) return; continue; }
+        if (mobHits(m, cx(h), hy(h))) return;
+      }
+      m.id = W.mobs.length; m.d = dist;
+      W.mobs.push(m);
+    }
     function sideHold(cur, nxt, m) {
       var c = cx(cur), dir = cx(nxt) >= c ? -1 : 1, t0 = top(cur);
       for (var i = 0; i < 12; i++) {
@@ -193,7 +235,7 @@
         if (Math.abs(x - c) < 50) continue;
         var h = mk('grip', x, y);
         if (!reach(cur, h, m) || !reach(h, nxt, Math.min(0.9, m + 0.08))) continue;
-        if (nearVent(y)) continue;
+        if (nearVent(y) || mobNear(x, y)) continue;
         if (Math.sqrt((x - cx(nxt)) * (x - cx(nxt)) + (y - nxt.y) * (y - nxt.y)) < 60) continue;
         commit(h, true); h.main = cur.main;
         shard(x, y + 16, 3);
@@ -256,7 +298,7 @@
         if (count === 1 && forced) { kind = forced; forced = null; }
         else if (!tutorial && count > 0) kind = pick(cfg.kinds);
         var needRest = sinceRest >= restEvery;
-        if (needRest && kind !== 'updraft' && kind !== 'spring' && kind !== 'tube') kind = 'leap';
+        if (needRest && kind !== 'updraft' && kind !== 'spring' && kind !== 'tube' && kind !== 'vent' && kind !== 'drip' && kind !== 'bird' && kind !== 'drone') kind = 'leap';
         if (windLeft > 0 && (kind === 'spring' || kind === 'tube' || kind === 'lift')) kind = 'leap';
         // nothing that needs timing may follow a hold you cannot wait on
         if ((cur.type === 'phase' || cur.type === 'crumble') && kind !== 'spring' && kind !== 'tube') kind = 'leap';
@@ -271,12 +313,15 @@
           windLeft = 3; mm = m - 0.1; kind = 'leap';
         }
 
-        if (kind === 'leap' || kind === 'vent' || kind === 'slick') {
+        var isMob = kind === 'drip' || kind === 'bird' || kind === 'drone';
+        if (isMob && (cur.type === 'plate' || cur.type === 'slick' || cur.type === 'lift' || windLeft > 0)) { kind = 'leap'; isMob = false; }
+        if (kind === 'leap' || kind === 'vent' || kind === 'slick' || isMob) {
           var type = needRest ? 'ledge' : (kind === 'slick' ? 'slick' : 'grip');
-          var range = kind === 'vent' ? [Math.max(dyR[0], 72), dyR[1]] : dyR;
-          nxt = place(cur, type, mm, range);
+          var range = (kind === 'vent' || kind === 'bird') ? [Math.max(dyR[0], 76), dyR[1]] : dyR;
+          nxt = place(cur, type, mm, range, kind === 'drip' || kind === 'drone' ? 86 : 0);
           prev = cur;
           if (kind === 'vent') vent(prev, nxt);
+          else if (isMob) mob(prev, nxt, kind);
           else if (tutorial ? count < 4 : rnd() < 0.7) between(prev, nxt);
           advance(nxt);
           if (type === 'slick') sinceRest++;
@@ -402,7 +447,7 @@
       for (var b = W.bucketOf(y0); b <= W.bucketOf(y1); b++) (grid[b] || (grid[b] = [])).push(id);
     }
     function index() {
-      var g = W.grid = { holds: [], vents: [], winds: [], drafts: [], shards: [], springs: [], tubes: [] };
+      var g = W.grid = { holds: [], vents: [], winds: [], drafts: [], shards: [], springs: [], tubes: [], mobs: [] };
       W.holds.forEach(function (h) {
         if (h.type === 'plate') put(g.holds, h.y0 - 30, h.y1 + 30, h.id);
         else if (h.type === 'lift') put(g.holds, h.y0 - 60, h.y0 + h.ay + 60, h.id);
@@ -414,6 +459,11 @@
       W.shards.forEach(function (sh) { put(g.shards, sh.y - 40, sh.y + 40, sh.id); });
       W.springs.forEach(function (s) { put(g.springs, s.y - 40, s.y + 40, s.id); });
       W.tubes.forEach(function (tb) { put(g.tubes, tb.ay - 40, tb.ay + 40, tb.id); });
+      W.mobs.forEach(function (m) {
+        if (m.kind === 'drip') put(g.mobs, m.y - m.fall - 30, m.y + 30, m.id);
+        else if (m.kind === 'bird') put(g.mobs, m.y - 40, m.y + 40, m.id);
+        else put(g.mobs, m.y - m.amp - 40, m.y + m.amp + 40, m.id);
+      });
     }
 
     for (var i = 0; i < plan.length; i++)
@@ -468,7 +518,7 @@
       pitons: 0, pitonHold: -1,
       p: { x: 0, y: 0, vx: 0, vy: 0, state: 'hold', hold: -1, stamina: C.ST_MAX, lastHold: -1, lastHoldT: -9,
            apexY: 0, noGrabT: 0, wantGlide: false, gliding: false, steer: 0, zipTo: -1, secondWind: true,
-           hitT: -9, deadT: 0, face: 1, springT: -9, tubeT: -9 }
+           hitT: -9, deadT: 0, face: 1, springT: -9, tubeT: -9, hops: 0 }
     };
     sim.pitons = sim.mods.pitonMax;
     respawn(sim);
@@ -478,6 +528,7 @@
   function attach(sim, h, px, py) {
     var p = sim.p;
     p.state = 'hold'; p.hold = h.id; p.vx = 0; p.vy = 0; p.gliding = false; p.zipTo = -1;
+    p.hops = sim.mods.hops || 0;
     if (h.type === 'ledge' || h.type === 'camp') {
       p.x = clamp(px, h.x - h.hw + 8, h.x + h.hw - 8); p.y = h.y + 6 + C.PR;
       p.secondWind = true;
@@ -524,20 +575,21 @@
   }
   S.leap = leap;
 
-  function grapple(sim, tx, ty) {
+  // quiet: do not announce a miss (the caller has something else to try)
+  function grapple(sim, tx, ty, quiet) {
     var p = sim.p, W = sim.world;
     if (!sim.tools.grapple || p.state === 'dead' || p.state === 'zip') return false;
-    var best = -1, bd = 1e18, R2 = C.GRAPPLE_R * C.GRAPPLE_R;
+    var GR = sim.mods.grapR || C.GRAPPLE_R, best = -1, bd = 1e18, R2 = GR * GR;
     for (var i = W.anchors.length - 1; i >= 0; i--) {
       var h = W.holds[W.anchors[i]];
-      if (h.y < p.y - C.GRAPPLE_R) break;          // anchors are stored bottom to top
+      if (h.y < p.y - GR) break;                   // anchors are stored bottom to top
       if (h.id === p.hold) continue;
       var dx = h.x - p.x, dy = h.y - p.y;
       if (dx * dx + dy * dy > R2) continue;
       var ex = tx == null ? dx : h.x - tx, ey = ty == null ? dy : h.y - ty, d = ex * ex + ey * ey;
       if (d < bd) { bd = d; best = h.id; }
     }
-    if (best < 0) { ev(sim, 'nograpple'); return false; }
+    if (best < 0) { if (!quiet) ev(sim, 'nograpple'); return false; }
     if (p.state === 'hold') detach(sim);
     p.state = 'zip'; p.zipTo = best; p.gliding = false;
     p.stamina = Math.max(0, p.stamina - C.ST_GRAPPLE);
@@ -545,6 +597,15 @@
     return true;
   }
   S.grapple = grapple;
+
+  // A kick upward in mid-air. Only climbers with the air-hop perk have any (mods.hops).
+  S.airHop = function (sim) {
+    var p = sim.p;
+    if (p.state !== 'air' || p.hops <= 0) return false;
+    p.hops--; p.vy = 560; p.apexY = p.y; p.gliding = false;
+    ev(sim, 'hop');
+    return true;
+  };
 
   function placePiton(sim) {
     var p = sim.p;
@@ -565,7 +626,7 @@
       case 'ledge': case 'camp':
         return Math.abs(p.x - h.x) <= h.hw + 10 && Math.abs(p.y - (h.y + 2)) <= 6 + C.PR + C.GRAB_ASSIST;
       case 'plate':
-        return sim.tools.gloves && !plateOn(h, t) && p.vy <= 80 &&
+        return sim.tools.gloves && (sim.mods.insulated || !plateOn(h, t)) && p.vy <= 80 &&
                Math.abs(p.x - h.x) <= h.hw + 2 && p.y >= h.y0 && p.y <= h.y1;
       case 'phase':
         if (!phaseOn(h, t)) return false;
@@ -607,6 +668,20 @@
       if (ventOn(v, t) && Math.abs(p.y - v.y) <= 13 + C.PR && p.x >= v.x0 - C.PR && p.x <= v.x1 + C.PR) {
         knock(sim, -v.side, 430); break;
       }
+    }
+    list = W.grid.mobs[b];
+    if (list && t - p.hitT > 0.5) for (i = 0; i < list.length; i++) {
+      var m = W.mobs[list[i]];
+      mobPos(m, t, MP);
+      if (!MP.on) continue;
+      var mx = MP.x - p.x, my = MP.y - p.y, mr = m.r + C.PR;
+      if (mx * mx + my * my > mr * mr) continue;
+      if (m.kind === 'drone' && sim.mods.insulated) continue;
+      if (m.kind === 'bird') knock(sim, MP.dir, 330);
+      else if (m.kind === 'drip') { knock(sim, mx > 0 ? -1 : 1, 130); p.vy = -240; }
+      else { knock(sim, mx > 0 ? -1 : 1, 230); p.stamina = Math.max(0, p.stamina - 10); }
+      ev(sim, 'mob', m.kind);
+      break;
     }
     if (sim.ghost) return;
     list = W.grid.shards[b];
@@ -661,7 +736,7 @@
           if (p.y > z.yTrig + 24) { rs.on = true; rs.id = i; rs.level = p.y - z.lead; ev(sim, 'rise'); break; }
         }
       } else {
-        if (rs.level < rz.yEnd) rs.level = Math.min(rz.yEnd, rs.level + rz.speed * dt);
+        if (rs.level < rz.yEnd) rs.level = Math.min(rz.yEnd, rs.level + rz.speed * (sim.mods.riseK || 1) * dt);
         if (p.y < rs.level + 4) { die(sim, p.x, p.y); ev(sim, 'burn'); return; }
         if (p.y > rz.yEnd + 500) rs.on = false;       // well clear of it: the next shaft can start
       }
@@ -684,13 +759,13 @@
       }
       if (h.type === 'crumble') {
         var c = sim.crumble[h.id];
-        if (c && c.t0 != null && t - c.t0 >= C.CRUMBLE_T) {
+        if (c && c.t0 != null && t - c.t0 >= C.CRUMBLE_T * (sim.mods.crumbleK || 1)) {
           c.t0 = null; c.back = t + C.CRUMBLE_BACK;
           drop(sim, 'crumble', h.id); return;
         }
       }
       if (h.type === 'phase' && !phaseOn(h, t)) { drop(sim, 'phaseout', h.id); return; }
-      if (h.type === 'plate' && plateOn(h, t)) {
+      if (h.type === 'plate' && plateOn(h, t) && !sim.mods.insulated) {
         detach(sim);
         p.vx = (p.x < C.W / 2 ? 1 : -1) * 160; p.vy = -40; p.noGrabT = t + 0.5; p.hitT = t;
         p.stamina = Math.max(5, p.stamina - 22);
@@ -728,7 +803,7 @@
       // steer sets the sideways speed you are easing toward; with no steer you keep most of your drift
       if (p.steer !== 0) p.vx += (p.steer * C.GLIDE_VX - p.vx) * Math.min(1, C.GLIDE_EASE * dt);
       else p.vx -= p.vx * Math.min(1, 0.8 * dt);
-      p.stamina = Math.max(0, p.stamina - C.ST_GLIDE * dt);
+      p.stamina = Math.max(0, p.stamina - C.ST_GLIDE * (sim.mods.glideK || 1) * dt);
       if (p.apexY > p.y + 300) p.apexY = p.y + 300;   // a glide breaks the fall
     } else {
       p.vy -= C.G * dt;
@@ -757,7 +832,7 @@
         }
       }
     }
-    if ((p.apexY - p.y > C.FALL_DEATH && !p.gliding) || p.y < -60) die(sim, p.x, p.y);
+    if ((p.apexY - p.y > C.FALL_DEATH * (sim.mods.fallK || 1) && !p.gliding) || p.y < -60) die(sim, p.x, p.y);
   }
   S.step = step;
 

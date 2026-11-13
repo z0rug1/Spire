@@ -139,7 +139,7 @@ console.log('Main tower: summit reached.');
 console.log(`  tower height : ${Math.round(world.top * C.M_PER_UNIT)} m (${Math.round(world.top)} units), ${world.camps.length} camps`);
 console.log(`  bot          : ${r.leaps} leaps, ${(r.sim.t / 60).toFixed(1)} min of sim time, lowest grip on landing ${r.minLand.toFixed(0)}`);
 console.log('  holds        :', JSON.stringify(count));
-console.log(`  hazards      : ${world.vents.length} vents, ${world.winds.length} wind bands, ${world.drafts.length} updrafts, ${world.springs.length} bounce caps, ${world.tubes.length} tubes`);
+console.log(`  hazards      : ${world.vents.length} vents, ${world.winds.length} wind bands, ${world.drafts.length} updrafts, ${world.springs.length} bounce caps, ${world.tubes.length} tubes, ${world.mobs.length} moving hazards (${['drip', 'bird', 'drone'].map(k => world.mobs.filter(m => m.kind === k).length + ' ' + k).join(', ')})`);
 console.log(`  set pieces   : ${world.sets.map(s => s.type + ' ' + Math.round(s.y0 * C.M_PER_UNIT) + '-' + Math.round(s.y1 * C.M_PER_UNIT) + ' m').join(', ')}`);
 console.log(`  chalk        : ${chalk} across ${world.shards.length} shards`);
 console.log(`  gates (m)    : ${world.gates.map(g => Math.round(g * C.M_PER_UNIT)).join(', ')}`);
