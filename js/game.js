@@ -428,7 +428,7 @@
       if (len < C.DRAG_MIN) { aim = null; return; }
       var pow = Math.min(1, len / C.DRAG_FULL), v = pow * sim.mods.vmax, vx = dx / len * v, vy = dy / len * v;
       var pv = S.preview(sim, vx, vy, 0.85);
-      aim = { ok: true, vx: vx, vy: vy, power: pow, pts: pv.pts, hit: pv.hit, cue: !!save.set.sling };
+      aim = { ok: true, vx: vx, vy: vy, power: pow, pts: pv.pts, hit: pv.hit };
     } else if (p.state === 'air') {
       aim = null;
       if (ptr.kind === 'aim') { ptr.kind = 'air'; ptr.t0 = now - 1; ptr.noTap = true; }
