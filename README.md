@@ -15,9 +15,11 @@ Plain HTML, CSS and JavaScript: no build step, no dependencies, no image or audi
 
 ## Four ways to climb
 
-- **The story.** You are a courier from the Roots, the lowest floors of a tower about seventeen kilometres
+- **The story.** You are a courier from the Roots, the lowest floors of a tower about thirty-five kilometres
   tall. The water that flows down from the Crown is failing, and nobody has heard from the Crown in
-  a generation. Four districts, 17 camps with the people who live there, three faction choices and
+  a generation. Six districts (the Roots, the Cisterns, the Works, the Gardens, the Archive and the
+  Crown), 25 camps with the people who live there, two bivouacs between every pair of camps, three
+  faction choices and
   three endings, one of them hidden. Camps sell upgrades for the chalk you collect, and a tailor
   sells scarves, glider skins and trails.
 - **The daily tower.** A new short tower every day, the same for everyone, at the same base stats.
@@ -43,9 +45,14 @@ Plain HTML, CSS and JavaScript: no build step, no dependencies, no image or audi
 | Grapple rings (the Works onward) | Tap one to be hauled in |
 | Updrafts (the Gardens onward) | Lift you while you glide |
 | Steel plates (the Crown) | Magnet gloves catch at the top of each hop; some plates go live |
+| Sluice levers and blue/amber holds (the Cisterns onward) | A lever flips which colour is solid; faded holds are the other colour. Decoys with chalk tempt you the wrong way |
 
-Each district also has one hand-built set piece: the Blackout, the Furnace Shaft (rising slag),
-the Thermal Ladder and the Alternator.
+Each district also has one hand-built set piece: the Blackout, the Sluice Gates (a two-ladder lever
+puzzle), the Furnace Shaft (rising slag), the Thermal Ladder, the Stacks (shelf lifts and levers)
+and the Alternator.
+
+Grip is the main pressure. It drains faster in each district as the air thins, and an unhurried
+climber will need the riggers' upgrades from the Cisterns on.
 
 ## Controls
 
@@ -117,10 +124,13 @@ node tests/verify.js --endless 60             # plus the first 60 segments of th
 
 Towers are generated from seeds, so everyone climbs the same walls. The test sends a bot from the
 first camp to the top with base stats and no upgrades, and fails if there is a gap it cannot
-cross. Run it after changing physics constants, district settings or seeds.
+cross. It also checks the balance with three climbers: an expert (half a second per hold, no
+upgrades) must finish, an average climber (1.6 s per hold) must fail without upgrades, and the same
+average climber buying upgrades with the chalk found on the way must finish. Run it after changing
+physics constants, district settings or seeds.
 
 What has been checked: the whole story tower, the daily towers up to late May 2028, and the first
-60 segments (about 34 km) of the endless climb. Beyond that the endless wall follows the same
+60 segments (about 30 km) of the endless climb. Beyond that the endless wall follows the same
 rules but has not been climbed by the bot.
 
 ## Tuning

@@ -22,7 +22,28 @@
     ] },
     { name: 'Lamp Row', npcs: [{ who: 'Nib', x: 30, coat: '#b9843f', hair: '#3a2a1c', prop: 'lamp', scale: 0.72 }], lines: [
       ['Nib', 'Are you going to see the Crown? Ask them why the lamps flicker.'],
-      ['', 'Above you the brick gives way to iron. The air starts to taste of smoke.']
+      ['', 'Above you the brick turns to black, wet stone. Somewhere behind it, a lot of water is moving.']
+    ] },
+    { name: 'Cistern Gate', npcs: [{ who: 'Wren', x: 34, coat: '#3f6f86', skin: '#c99672', hat: 'hood', hatCol: '#2b4f60', prop: 'staff', robe: true }], lines: [
+      ['', 'A round door in the stone, beaded with water. Behind it: tanks, each one as wide as a street.'],
+      ['Wren', "A climber? From below? Nobody comes through the Cisterns. I'm Wren. I keep the sluices."],
+      ['Wren', "The levers flip the sluices. Blue or amber. When the blue ones run, the blue holds take your weight. Pull a lever, and the other colour does."],
+      ['Wren', "Watch which colour leads up before you pull. The walls in here like to trick you."]
+    ] },
+    { name: 'Pump Gallery', npcs: [{ who: 'Wren', x: 34, coat: '#3f6f86', skin: '#c99672', hat: 'hood', hatCol: '#2b4f60', prop: 'staff', robe: true }], lines: [
+      ['', 'You look down into the first tank. It is full to the brim.'],
+      ['Wren', "Full? Of course it's full. They're all full. The rains up top never stopped."],
+      ['Wren', "The sluices to the Roots open on Crown order. The order hasn't come. Not in my time, not in my mother's."]
+    ] },
+    { name: 'The Overflow', npcs: [{ who: 'Drain-boy', x: 30, coat: '#5a7a8a', hair: '#2a2a2a', prop: 'basket', scale: 0.75 }], lines: [
+      ['Drain-boy', "When the tanks spill over, it goes out the side of the tower. Into the clouds. Pretty, from out here."],
+      ['', 'You think of the drip-lines on Sedge\'s farm. Then you try not to.']
+    ] },
+    { name: 'Dry Valve', npcs: [{ who: 'Wren', x: 34, coat: '#3f6f86', skin: '#c99672', hat: 'hood', hatCol: '#2b4f60', prop: 'staff', robe: true }], lines: [
+      ['', 'One great valve, painted with the Crown sign, chained shut. The chain is newer than the valve.'],
+      ['Wren', "I could cut it. I've thought about it every night for twenty years. Then the Works would come for me, and the Crown's order would still say no."],
+      ['Wren', "Go up. If there's anyone up there, ask them why. If you get an answer, shout it down the pipes. I'll be listening."],
+      ['', 'Above you the stone turns to iron. The air starts to taste of smoke.']
     ] },
     { name: 'Works Gate', npcs: [{ who: 'Warden Ost', x: 34, coat: '#6b4a3a', skin: '#c99672', hat: 'helmet', hatCol: '#c9a23a', prop: 'pike' }, { who: 'Tallow', x: 100, coat: '#c9772f', hat: 'cap', hatCol: '#3a3a3a', prop: 'rope' }], unlock: 'grapple', lines: [
       ['Warden Ost', 'Halt. Roots traffic ends here. Crown order.'],
@@ -81,6 +102,26 @@
       { label: 'Keep your petition', flag: 'refused', after: [
         ['Curator Vane', "Then climb. You won't like what you find."] ] }
     ] } },
+    { name: 'Archive Door', npcs: [{ who: 'Quill', x: 34, coat: '#5a3f6a', hair: '#d8d8d8', prop: 'ledger', robe: true }], lines: [
+      ['', 'Above the Gardens, the walls turn to shelves. Millions of papers, and the smell of ink.'],
+      ['Quill', "Careful, careful. Mind the levers: they swing the stacks. Blue or amber, same as the sluices below. The Curator's engineers built both."],
+      ['Quill', "I am Quill, chief copyist. Forty years in the Crown's own hand."]
+    ] },
+    { name: 'The Copying Room', npcs: [{ who: 'Quill', x: 34, coat: '#5a3f6a', hair: '#d8d8d8', prop: 'ledger', robe: true }], lines: [
+      ['', 'Rows of desks. At each one, a scribe copies a letter onto Crown paper, then presses the Crown seal into the wax.'],
+      ['Quill', "The drafts come down from above. We only make them fair. Lovely hand, the Crown has. Never changes."],
+      ['', 'You ask him if he has ever seen a draft arrive.'],
+      ['Quill', "...The Curator brings them. Every season. Why would I need to see them arrive?"]
+    ] },
+    { name: 'Seal Vault', npcs: [{ who: 'Vault-keeper', x: 32, coat: '#3a3a4a', skin: '#c99672', hat: 'cap', hatCol: '#202030', prop: 'pike' }], lines: [
+      ['', 'A vault of seals behind glass. Every Crown seal ever cut. Several are new.'],
+      ['Vault-keeper', "The old ones wore out. The Curator has them recut. Same design. You'd never know."]
+    ] },
+    { name: 'Reading Gallery', npcs: [{ who: 'Quill', x: 34, coat: '#5a3f6a', hair: '#d8d8d8', prop: 'ledger', robe: true }], lines: [
+      ['Quill', "I copied a letter once that said the Roots had all the water they needed. The same week, a boy from the Roots died of thirst at the Works gate."],
+      ['Quill', "I told myself the Crown knew something I didn't. Forty years. Go on up, courier. Find out what it knows."],
+      ['', 'Above the last shelf, the walls turn to bare steel.']
+    ] },
     { name: 'Crown Lock', unlock: 'gloves', lines: [
       ['', 'The door to the Crown is steel, six metres thick, and has no handle. Beside it hangs a maintenance locker, rusted open.'],
       ['', 'Inside: a pair of magnet gloves, the grips worn smooth. Nobody has used them in a very long time.'],
@@ -91,11 +132,11 @@
       ['', "A speaker crackles. 'Ration schedule unchanged. Carry on.' The voice is a recording."]
     ] },
     { name: 'Signal Deck', lines: [
-      ['', 'Rows of message tubes, the kind that carry orders down the tower. Every one of them runs to a single desk in the Gardens. None of them runs up.'],
+      ['', 'Rows of message tubes, the kind that carry orders down the tower. Every one of them runs down to one desk in the Archive, the one where Quill sits. None of them runs up.'],
       ['', "The Crown's letters were never sent from the Crown."]
     ] },
     { name: 'Last Light', lines: [
-      ['', 'The air is thin. Below you, {km} kilometres of lamps: the Gardens, the Works, the Roots, all still waiting for word.'],
+      ['', 'The air is thin. Below you, {km} kilometres of lamps: the Archive, the Gardens, the Works, the Cisterns, the Roots, all still waiting for word.'],
       ['', 'One more wall.']
     ] },
     { name: 'The Crown Chamber', lines: [
@@ -127,6 +168,8 @@
     drip: 'Slag drips on a rhythm. Leap through the gap between drops.',
     bird: 'Wall-swifts fly a fixed beat and will knock you off. Let one pass, then go.',
     drone: 'Patrol drones ride a rail. Touching one costs you grip and your hold.',
+    switch: 'A sluice lever. Grabbing it flips which colour of hold is solid, blue or amber.',
+    gate: 'Faded holds only take your weight while their colour runs. Find the lever.',
     biv: 'A bivouac. Your climb is saved here too.',
     piton: 'Tap the piton button on a hold to set a checkpoint there.',
     camp: 'Camp reached. Your climb is saved here.'
@@ -136,6 +179,8 @@
   var sets = {
     dark: { name: 'The Blackout', hint: 'The lamps are out. Fungus marks the holds, and the dotted arc still shows your leap.' },
     slag: { name: 'The Furnace Shaft', hint: 'Once you leave this ledge the shaft floods with slag. Keep climbing.' },
+    sluice: { name: 'The Sluice Gates', hint: 'Two ladders, blue and amber, and only one is solid at a time. Pull each lever when the other colour leads up.' },
+    stacks: { name: 'The Stacks', hint: 'Ride a shelf up, pull the lever at the top, then take the colour that is now solid.' },
     storm: { name: 'The Thermal Ladder', hint: 'Ride each updraft to its top, then glide across to the next. There is nowhere to land in between.' },
     alt: { name: 'The Alternator', hint: 'Left and right plates take turns going live. Cross when the next one goes dark.' }
   };
@@ -161,12 +206,15 @@
                       : 'In the Gardens, the Curator closes his shutters. It does not help. The horn is wired to every floor.');
       out.push(f.valve ? 'In the Works they remember who turned the valve. Riggers are already on the wall, climbing to meet you.'
                        : 'In the Works, Marrow opens the ledgers that night and reads them aloud herself.');
+      out.push('In the Archive, Quill puts down his pen for the first time in forty years.');
+      out.push("In the Cisterns, Wren cuts the chain on the great valve. She doesn't wait for an order.");
       out.push(f.kind ? 'At the Works gate, a family that once shared your water starts up the stair.'
                       : "In the Roots, Sedge's drip-lines run. Nobody is quite sure whom to thank.");
       out.push('No one knows what the tower will be without a Crown. For the first time in ninety years, it gets to find out.');
     } else if (id === 'voice') {
       out.push("'This is the Crown,' you say, and every floor goes silent to listen.");
-      out.push('You order the ration doubled for the Roots. You order the vents repaired. They obey. They always have.');
+      out.push('You order the sluices opened and the ration doubled for the Roots. You order the vents repaired. They obey. They always have.');
+      out.push('Down in the Archive, Quill copies your orders in the same lovely hand. He never asks why it has changed.');
       out.push(f.seal ? 'The Curator hears a new voice use the old seal and understands at once. He says nothing. Neither do you.'
                       : 'The Curator knows the voice is not his. One day he will come up the stair. You keep the gloves close.');
       out.push(f.kind ? 'You send water to the family at the gate first. It is the only order you sign with your own name, and you burn the copy.'
@@ -174,7 +222,7 @@
       out.push('The tower is better run than it has been in a lifetime. It is still run from an empty room. Now you are the one in it.');
     } else {
       out.push('You do not speak at all. You open every valve, unbar the stair, and wedge the great door with the logbook.');
-      out.push('Water reaches the Roots by morning.');
+      out.push('In the Cisterns the sluices swing open all at once. Water reaches the Roots by morning.');
       out.push("By evening the first climbers arrive: riggers from the Works, a gardener's apprentice with a seed-silk wing, a family from the gate.");
       out.push('They read the logbook themselves. Nobody needs to be told.');
       out.push('The Crown is a room again. People come and go.');

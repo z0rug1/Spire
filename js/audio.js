@@ -4,7 +4,7 @@
   var S = window.Spire;
   var ac = null, master = null, noiseBuf = null, muted = false;
   var amb = null, glideGain = null, lastSteam = 0;
-  var ROOTS = [55, 49, 65.41, 43.65];   // drone root per district (Hz)
+  var ROOTS = [55, 49, 65.41, 43.65, 51.91, 46.25];   // drone root per district (Hz)
 
   function init() {
     if (ac) { if (ac.state === 'suspended') ac.resume().catch(function () {}); return; }
@@ -74,7 +74,13 @@
       arp: [0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 3, -1, 2, -1, 1, -1], bass: [0, 8], hat: [4, 12], kick: [0] },
     { bpm: 60, pad: 'sine', lead: 'sine', dec: 1.6, oct: 24, padG: 0.05,               // The Crown: thin air, E minor
       chords: [[40, 52, 59, 64, 67], [36, 48, 55, 64, 67], [38, 50, 57, 62, 66], [35, 47, 54, 62, 66]],
-      arp: [2, -1, -1, -1, 3, -1, -1, -1, 1, -1, -1, -1, 4, -1, -1, -1], bass: [0], hat: [8], kick: [0] }
+      arp: [2, -1, -1, -1, 3, -1, -1, -1, 1, -1, -1, -1, 4, -1, -1, -1], bass: [0], hat: [8], kick: [0] },
+    { bpm: 72, pad: 'sine', lead: 'triangle', dec: 0.35, oct: 12, padG: 0.045,        // The Cisterns: dripping plucks, C minor
+      chords: [[36, 48, 55, 63], [44, 56, 60, 63], [39, 51, 55, 62], [43, 55, 59, 62]],
+      arp: [0, -1, -1, 2, -1, -1, 1, -1, 3, -1, -1, 1, -1, 2, -1, -1], bass: [0, 6], hat: [3, 11], kick: [0] },
+    { bpm: 68, pad: 'triangle', lead: 'square', dec: 0.3, oct: 12, padG: 0.04,          // The Archive: a quiet harpsichord, G minor
+      chords: [[43, 55, 58, 62], [39, 51, 55, 58], [41, 53, 57, 60], [38, 50, 54, 57]],
+      arp: [0, 1, 2, 1, 3, 1, 2, 1, 0, 1, 2, 1, 3, 2, 1, 2], bass: [0, 8], hat: [4, 12], kick: [0] }
   ];
   var mus = { on: true, d: 0, cur: 0, level: 0, step: 0, next: 0, bus: null, lead: null };
   function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
@@ -184,6 +190,7 @@
         case 'tube': hiss('bandpass', 300, 2600, 2.5, 0.3, 0.28); tone('sine', 90, 240, 0.28, 0.14); break;
         case 'phaseout': tone('sine', 880, 220, 0.18, 0.08); break;
         case 'over': tone('sine', 392, 392, 0.4, 0.09); tone('sine', 311.1, 311.1, 0.5, 0.09, 0.2); tone('sine', 261.6, 261.6, 1.0, 0.1, 0.45); break;
+        case 'lever': tone('square', 160, 110, 0.06, 0.07); hiss('lowpass', 900, 300, 0.7, 0.35, 0.12, 0.05); tone('sine', 330, 330, 0.25, 0.05, 0.12); break;
         case 'hop': hiss('bandpass', 700, 2200, 1.2, 0.14, 0.14); tone('sine', 420, 760, 0.12, 0.08); break;
         case 'peck': tone('square', 900, 500, 0.08, 0.06); hiss('lowpass', 1500, 400, 0.6, 0.18, 0.16); break;
         case 'sizzle': hiss('highpass', 2600, 1200, 0.6, 0.4, 0.2); tone('sine', 180, 70, 0.2, 0.14); break;

@@ -64,7 +64,7 @@
   S.DAILY_PLAN = [{ d: 0, n: 6 }, { d: 4, n: 7, intro: true }, { d: 1, n: 7, intro: true }, { d: 2, n: 7, intro: true }, { d: 5, n: 7, intro: true }, { d: 3, n: 7, intro: true }];
   // Daily towers are seeded by the local date. DAILY_SALT lists the dates whose first seed
   // produced a gap the test climber could not cross (see tests/verify.js --daily).
-  S.DAILY_SALT = { 20270512: 1, 20270805: 1, 20280424: 1 };
+  S.DAILY_SALT = { 20261205: 1, 20270225: 1, 20270728: 1, 20280330: 1 };
   S.dateKey = function (d) { d = d || new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
   S.dailySeed = function (key) { return (Math.imul(key, 2654435761) + (S.DAILY_SALT[key] || 0) * 7919) >>> 0; };
 
@@ -158,6 +158,7 @@
     function commit(h, side) {
       h.id = W.holds.length; h.seg = seg; h.d = dist; h.side = !!side;
       h.main = side ? mainIdx : (W.holds.length ? ++mainIdx : 0);
+      h.esw = gsw;                  // the lever state a climber on the route has while on this hold
       if (h.type === 'camp') h.sw = gsw;
       W.holds.push(h);
       if (h.type === 'anchor') W.anchors.push(h.id);
@@ -836,7 +837,7 @@
       if (h.type === 'ledge' || h.type === 'camp') {
         p.stamina = Math.min(sim.mods.stMax, p.stamina + C.ST_REST * (h.type === 'camp' ? 2 : 1) * dt);
       } else {
-        p.stamina -= C.ST_DRAIN * thin(W, h) * sim.mods.drain * (h.type === 'slick' ? 2.5 : 1) * dt;
+        p.stamina -= C.ST_DRAIN * thin(W, h) * sim.mods.drain * (h.type === 'slick' ? 2.5 : h.type === 'lift' ? 0.5 : 1) * dt;
         if (p.stamina <= 0) {
           detach(sim); p.vx = 0; p.vy = -30; p.noGrabT = t + 0.5;
           p.stamina = p.secondWind ? 15 : 5; p.secondWind = false;

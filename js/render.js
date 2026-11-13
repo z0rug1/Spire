@@ -31,8 +31,21 @@
       hold: '#e7c768', hi: '#fff3bf', lo: '#806a2a', ledge: '#4b5375', ledgeTop: '#96a0cc',
       glow: '#7fd4ff', sky: ['#03040c', '#141a3a'], fog: '4,6,16', aim: '#ffffff', rim: 'rgba(255,255,255,.55)',
       zone: '170,215,255', tent: '#5a64a8'
+    },
+    { // The Cisterns: black wet stone, pipes, blue water light
+      wall: ['#17222a', '#1a2731', '#141d24', '#1d2b36'], mortar: '#0b1116',
+      hold: '#a9c3cf', hi: '#e2f2f8', lo: '#4b6370', ledge: '#5d7480', ledgeTop: '#a7c1cc',
+      glow: '#5fc3ff', sky: ['#04090d', '#0d1d29'], fog: '5,12,18', aim: '#ffffff', rim: 'rgba(255,255,255,.55)',
+      zone: '170,220,255', tent: '#3f6f86'
+    },
+    { // The Archive: dark wood shelves, parchment, candlelight
+      wall: ['#2a1f1a', '#2f231d', '#251b16', '#352821'], mortar: '#140e0b',
+      hold: '#d4a64a', hi: '#ffe7a8', lo: '#6e5020', ledge: '#6a4a33', ledgeTop: '#b08a5a',
+      glow: '#ffcf7a', sky: ['#0c0806', '#24170f'], fog: '14,9,6', aim: '#ffffff', rim: 'rgba(255,255,255,.55)',
+      zone: '255,225,180', tent: '#5a3f6a'
     }
   ];
+  var BLUE = '#4fb3e8', AMBER = '#f0a53a', flipT = -9, flipSw = 0;
 
   function hsh(a, b) { var n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return n - Math.floor(n); }
 
@@ -143,6 +156,8 @@
       if (d === 0) add(x, y, (Math.random() - 0.5) * 12, 8 + Math.random() * 14, 0, 3, 1.1, '#58e6c0', true);
       else if (d === 1) add(x, y, (Math.random() - 0.5) * 30, 30 + Math.random() * 50, 0, 2.2, 1.2, '#ff9a4a', true);
       else if (d === 2) add(x, y, 20 + Math.random() * 30, -15 - Math.random() * 25, 0, 3, 1.7, Math.random() < 0.5 ? '#f3b6c6' : '#ffffff');
+      else if (d === 4) add(x, y, 0, -60 - Math.random() * 60, -300, 1.2, 1.3, 'rgba(150,210,255,.8)');
+      else if (d === 5) add(x, y, (Math.random() - 0.5) * 10, -4 - Math.random() * 8, 0, 4, 1.2, 'rgba(255,230,180,.55)');
       else add(x, y, (Math.random() - 0.5) * 40, -25 - Math.random() * 40, 0, 3, 1.1, '#dfe9ff');
     }
   }
@@ -160,7 +175,7 @@
 
   /* ---------- wall ---------- */
   function drawWall(Wd, now) {
-    var r0 = Math.floor(cam.bottom / ROW) - 1, r1 = Math.floor((cam.bottom + viewH) / ROW) + 1, r, i, x, y, d, P, off;
+    var r0 = Math.floor(cam.bottom / ROW) - 1, r1 = Math.floor((cam.bottom + viewH) / ROW) + 1, r, i, x, y, d, P, off, k;
     for (r = r0; r <= r1; r++) {
       y = r * ROW;
       if (y < 0) {           // the floor of the Roots
@@ -218,6 +233,46 @@
             ctx.fillStyle = i % 2 ? '#4f8a4a' : '#3b6f3f';
             circle(x + (hsh(r, 20 + i) - 0.5) * 46, yy + (hsh(r, 30 + i) - 0.5) * 30, 5 + hsh(r, 40 + i) * 6);
           }
+        }
+      } else if (d === 4) {     // the Cisterns: big wet blocks, pipes, and the odd waterfall from a tank seam
+        off = (r & 1) * 50;
+        for (i = -1; i < 5; i++) { ctx.fillStyle = P.wall[(hsh(i, r) * 4) | 0]; ctx.fillRect(i * 100 + off + 1, y + 1, 98, ROW - 2); }
+        ctx.fillStyle = 'rgba(120,190,230,.06)'; ctx.fillRect(0, y + ROW - 6, C.W, 6);
+        var pb = Math.floor(r / 10);
+        for (k = 0; k < 2; k++) {
+          if (hsh(pb, 11 + k) < 0.55) {
+            x = 30 + ((hsh(pb, 13 + k) * 6) | 0) * 52;
+            ctx.fillStyle = '#0e171d'; ctx.fillRect(x, y, 14, ROW + 0.5);
+            ctx.fillStyle = '#3d5a68'; ctx.fillRect(x + 2, y, 10, ROW + 0.5);
+            ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x + 3, y, 2, ROW + 0.5);
+            if (r % 5 === 0) { ctx.fillStyle = '#26404c'; ctx.fillRect(x - 3, y + 18, 20, 7); }
+          }
+        }
+        var fb = Math.floor(r / 6);
+        if (hsh(fb, 21) < 0.3) {
+          x = 20 + hsh(fb, 22) * 320;
+          ctx.fillStyle = 'rgba(95,195,255,.16)'; ctx.fillRect(x - 6, y, 12, ROW + 0.5);
+          ctx.fillStyle = 'rgba(220,245,255,.35)';
+          for (k = 0; k < 3; k++) { var wy = y + ((now * 160 + k * 16 + r * 7) % ROW); ctx.fillRect(x - 3 + k * 2, wy, 1.5, 7); }
+        }
+      } else if (d === 5) {     // the Archive: shelves of books and scrolls, candles
+        ctx.fillStyle = '#1a120d'; ctx.fillRect(0, y, C.W, ROW + 0.5);
+        ctx.fillStyle = '#4a3324'; ctx.fillRect(0, y, C.W, 5);
+        ctx.fillStyle = '#6a4a33'; ctx.fillRect(0, y + 3, C.W, 1.5);
+        x = 2 + hsh(r, 1) * 6;
+        while (x < C.W - 4) {
+          var bw = 4 + hsh(x | 0, r) * 6, bh = 22 + hsh(r, x | 0) * 16, bc = hsh(x * 3 | 0, r * 7);
+          ctx.fillStyle = bc < 0.3 ? '#5a2f2a' : bc < 0.55 ? '#2f3f4a' : bc < 0.8 ? '#4a3f2a' : '#3f2a4a';
+          if (hsh(r, x | 0) < 0.08) { ctx.fillStyle = '#5e4c33'; oval(x + 6, y + 10, 7, 4); ctx.fillStyle = '#3a2c1c'; oval(x + 6, y + 10, 2.5, 1.6); x += 15; continue; }
+          ctx.fillRect(x, y + 5, bw, bh);
+          ctx.fillStyle = 'rgba(255,235,190,.12)'; ctx.fillRect(x + 1, y + 5 + bh * 0.3, bw - 2, 1.5);
+          x += bw + 0.8;
+        }
+        if (hsh(r, 9) < 0.12) {
+          x = 20 + hsh(r, 10) * 320;
+          light(P.glow, x, y + 34, 34, 0.45 + 0.1 * Math.sin(now * 7 + r));
+          ctx.fillStyle = '#e9dcc0'; ctx.fillRect(x - 2, y + 26, 4, 9);
+          ctx.fillStyle = '#ffd98a'; oval(x, y + 38 + Math.sin(now * 9 + r) * 0.6, 1.8, 3);
         }
       } else {
         off = (r & 1) * 36;
@@ -286,6 +341,33 @@
     var t = sim.t, x = S.holdX(h, t), y = S.holdY(h, t), i, p = sim.p;
     switch (h.type) {
       case 'grip': knob(x, y, P, h.d); break;
+      case 'gate': {            // a sluice-gated hold: solid in its colour, a ghost otherwise
+        var gc = h.col ? AMBER : BLUE, on2 = sim.sw === h.col, fresh = S.clamp((now - flipT) / 0.35, 0, 1);
+        if (on2) {
+          ctx.globalAlpha = 0.4 + 0.6 * fresh;
+          light(gc, x, y, 24, 0.35);
+          ctx.fillStyle = '#0b0f14'; rrect(x - 13, y - 13, 26, 25, 6); ctx.fill();
+          ctx.fillStyle = gc; rrect(x - 11.5, y - 11.5, 23, 22, 5); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,.45)'; rrect(x - 8, y + 2, 16, 5, 2.5); ctx.fill();
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.strokeStyle = gc; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.6; ctx.setLineDash([3, 3]);
+          rrect(x - 11, y - 11, 22, 21, 5); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
+        break;
+      }
+      case 'switch': {          // a sluice lever: the handle points to the colour that runs now
+        var lean = (sim.sw ? 1 : -1) * (0.55 - 0.55 * Math.max(0, 1 - (now - flipT) / 0.18) * (sim.sw === flipSw ? 1 : 0));
+        ctx.fillStyle = '#0b0f14'; rrect(x - 15, y - 15, 30, 14, 4); ctx.fill();
+        ctx.fillStyle = '#5d6a74'; rrect(x - 13.5, y - 13.5, 27, 11, 3); ctx.fill();
+        ctx.fillStyle = BLUE; ctx.fillRect(x - 12, y - 11, 6, 6); ctx.fillStyle = AMBER; ctx.fillRect(x + 6, y - 11, 6, 6);
+        var hx = x + Math.sin(lean) * 20, hy2 = y - 8 + Math.cos(lean) * 20;
+        ctx.strokeStyle = '#0b0f14'; ctx.lineWidth = 5; ctx.lineCap = 'round'; line(x, y - 8, hx, hy2);
+        ctx.strokeStyle = '#c9ced2'; ctx.lineWidth = 2.6; line(x, y - 8, hx, hy2);
+        ctx.fillStyle = '#0b0f14'; circle(hx, hy2, 7); ctx.fillStyle = sim.sw ? AMBER : BLUE; circle(hx, hy2, 5.6);
+        ctx.fillStyle = 'rgba(255,255,255,.6)'; circle(hx - 1.6, hy2 + 1.6, 1.6);
+        break;
+      }
       case 'phase':             // solid only part of the time: a bloom in the Gardens, a flicker stud elsewhere
         var solid = S.phaseOn(h, t), pw = S.phaseWarn(h, t), bloom = h.d === 2;
         var pc = bloom ? '255,150,190' : '127,212,255';
@@ -846,7 +928,7 @@
     ctx.fillStyle = 'rgba(255,255,255,.12)';
     for (i = i0; i <= i1; i++) {
       var cy = i * 290 + hsh(i, 1) * 180;
-      if (cy < 0 || S.districtAt(Wd, cy) < 2) continue;
+      if (cy < 0 || S.RANK[S.districtAt(Wd, cy)] < 3) continue;
       var sy = ch - (cy - cam.bottom) * 1.25 * kk, z = (60 + hsh(i, 4) * 70) * kk;
       var sx = ox + (((hsh(i, 2) * 600 + now * (6 + hsh(i, 3) * 14)) % (C.W + 300)) - 150 - cam.x) * kk;
       oval(sx, sy, z, z * 0.32); oval(sx + z * 0.5, sy - z * 0.12, z * 0.7, z * 0.26); oval(sx - z * 0.55, sy + z * 0.08, z * 0.6, z * 0.22);
@@ -1005,6 +1087,7 @@
     flash: function () { flashA = 1; },
     setWorld: function () { parts.length = 0; pops = {}; },
     pop: function (id, now) { pops[id] = now; },
+    flipped: function (sw, now) { flipT = now; flipSw = sw; },
     setLook: function (l) { look.scarf = l.scarf || '#e5484d'; look.wing = l.wing || '#f4ecd2'; look.rib = l.rib || 'rgba(120,100,60,.7)'; look.trail = l.trail || null; },
     scale: function () { return sc; },      // base scale (zoom 1): drag distances are measured in this
     cam: cam

@@ -3,7 +3,7 @@
   'use strict';
   var S = window.Spire, C = S.C, R = S.Render, A = S.Audio, ST = S.Story;
   var $ = function (id) { return document.getElementById(id); };
-  var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', KEY_E = 'spire.endless.v1', WORLD_V = 4;
+  var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', KEY_E = 'spire.endless.v1', WORLD_V = 5;
   var STEER_PX = 70;          // finger travel for full glide steering
 
   var mainWorld = S.generate(C.SEED, S.MAIN_PLAN), world = mainWorld;
@@ -37,6 +37,11 @@
         if (!s.cos) s.cos = { own: { red: 1, silk: 1, none: 1 }, scarf: 'red', wing: 'silk', trail: 'none' };
         if (!s.rec) s.rec = {};
         if (s.wv !== WORLD_V) s.ch = null;                                  // a challenge in progress pointed into the old layout
+        if ((s.wv || 0) < 5) {        // the Cisterns and the Archive were added: old camps 4-11 moved up 4, 12-16 up 8
+          var mv = function (i) { return i < 4 ? i : i < 12 ? i + 4 : i + 8; }, rk = function (o) { var n = {}; for (var k in o) n[mv(+k)] = o[k]; return n; };
+          s.camp = mv(s.camp || 0); s.maxCamp = mv(s.maxCamp || 0); s.visited = rk(s.visited || {}); s.seen = rk(s.seen || {});
+          for (var q = 0; q < s.maxCamp; q++) { s.visited[q] = 1; s.seen[q] = 1; }    // the new camps you passed in spirit
+        }
         if (s.wv !== WORLD_V) { s.taken = {}; s.marks = []; s.cp = null; s.wv = WORLD_V; }   // the tower layout changed
         return s;
       }
@@ -473,14 +478,15 @@
     banner(chNames(mm), 'Challenge climb'); A.sfx('banner');
     resume();
   }
+  function isGate(i) { return i > 0 && world.camps[i].d !== world.camps[i - 1].d; }
   function challengeCheckpoint(holdId, campIdx) {
     run.cp = holdId;
     if (campIdx != null && campIdx > run.camp) {
       run.camp = campIdx;
-      if (campIdx % 4 === 0) {                 // a district gate: take a split
-        var best = save.rec[chKey(run.m)], d = campIdx / 4 - 1, diff = best && best.splits[d] != null ? run.time - best.splits[d] : null;
+      if (isGate(campIdx)) {                   // a district gate: take a split for the district just finished
+        var dd = world.camps[campIdx - 1].d, d = S.RANK[dd], best = save.rec[chKey(run.m)], diff = best && best.splits[d] != null ? run.time - best.splits[d] : null;
         run.splits[d] = run.time;
-        toast(S.DISTRICTS[d].name + ' in ' + fmtLong(run.time) + (diff == null ? '' : ' (' + (diff <= 0 ? '\u2212' : '+') + fmtLong(Math.abs(diff)) + ')'), 4);
+        toast(S.DISTRICTS[dd].name + ' in ' + fmtLong(run.time) + (diff == null ? '' : ' (' + (diff <= 0 ? '\u2212' : '+') + fmtLong(Math.abs(diff)) + ')'), 4);
       }
     }
     save.ch = { m: run.m, cp: holdId, time: run.time, falls: run.falls, splits: run.splits.slice(), camp: run.camp };
@@ -494,7 +500,7 @@
     A.sfx('finish'); mode = 'end'; aim = null;
     html = '<h2>Summit</h2><div class="sub">' + chNames(run.m) + '</div><div class="stats">' +
       '<div><b>' + fmtLong(run.time) + '</b><span>Time</span></div><div><b>' + run.falls + '</b><span>Falls</span></div></div>';
-    for (i = 0; i < 4; i++) html += '<div class="row"><div class="grow"><div class="name">' + S.DISTRICTS[i].name + '</div></div><b>' + fmtLong(run.splits[i] || run.time) + '</b></div>';
+    for (i = 0; i < S.ORDER.length; i++) html += '<div class="row"><div class="grow"><div class="name">' + S.DISTRICTS[S.ORDER[i]].name + '</div></div><b>' + fmtLong(run.splits[i] || run.time) + '</b></div>';
     html += '<p style="margin-top:12px">' + (nb ? (prev ? 'A new best, ' + fmtLong(prev.time - run.time) + ' faster.' : 'Your first finish with these modifiers.') : 'Your best is still ' + fmtLong(prev.time) + '.') + '</p>' +
       '<button class="btn primary" data-act="run-quit">Back to title</button>';
     panel(html);
@@ -633,7 +639,7 @@
             }
           }
           else if (run.kind === 'challenge') {
-            if (p.lastHold !== world.camps[e.a].hold) { A.sfx('camp'); if (e.a % 4) toast(ST.camps[e.a].name + '. ' + fmtLong(run.time), 2.5); }
+            if (p.lastHold !== world.camps[e.a].hold) { A.sfx('camp'); if (!isGate(e.a)) toast(ST.camps[e.a].name + '. ' + fmtLong(run.time), 2.5); }
             challengeCheckpoint(world.camps[e.a].hold, e.a);
             if (e.a === world.camps.length - 1) finishChallenge();
           }
@@ -680,6 +686,7 @@
           else if (e.a === 'bird') { A.sfx('peck'); R.emit('dust', p.x, p.y, 8); }
           else { A.sfx('shock'); R.emit('spark', p.x, p.y, 12); }
           break;
+        case 'switch': A.sfx('lever'); R.flipped(sim.sw, now); vibrate(15); break;
         case 'hop': A.sfx('hop'); R.emit('chalk', p.x, p.y - 8, 6); break;
         case 'shock': A.sfx('shock'); R.emit('spark', p.x, p.y, 14); R.shake(7); vibrate(30); break;
         case 'zip': A.sfx('zip'); break;
