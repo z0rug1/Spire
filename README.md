@@ -30,7 +30,7 @@ generation. You climb the outside of the tower to find out why.
 
 | Action | Touch | Mouse |
 | --- | --- | --- |
-| Leap | Drag in the direction you want to go, release | Same, with the left button |
+| Leap | Pull back like a billiards cue (drag away from where you want to go), release | Same, with the left button |
 | Grapple (the Works onward) | Tap a ring; if it is out of reach, leap first and tap mid-air | Click |
 | Glide (the Gardens onward) | Hold a finger down mid-air; it steers toward your finger | Hold the button |
 | Magnet plates (the Crown) | Leap onto a steel plate; the gloves catch at the top of the hop | Same |
@@ -38,8 +38,9 @@ generation. You climb the outside of the tower to find out why.
 | Pause | Pause button | `Esc` |
 
 The dotted arc shows where a leap will take you and rings the hold it will catch. The ring around
-the climber is your grip: it drains while you hang and refills on ledges. Slingshot-style aiming
-(pull back instead of drag forward) is a toggle on the title screen and in the pause menu.
+the climber is your grip: it drains while you hang and refills on ledges. Pulling back keeps your
+finger off the route so you can see the arc; if you prefer to drag forward instead, there is an
+aim toggle on the title screen and in the pause menu.
 
 ## Put it online with GitHub Pages
 

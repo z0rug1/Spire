@@ -17,10 +17,16 @@
   function freshSave(set) {
     return { v: 1, camp: 0, maxCamp: 0, visited: { 0: 1 }, seen: {}, chalk: 0, got: 0, upg: {}, flags: {}, taken: {},
              marks: [], falls: 0, time: 0, hints: {}, ending: null, started: false,
-             set: set || { sling: false, sound: true, fs: true } };
+             set: set || { sling: true, aim2: 1, sound: true, fs: true } };
   }
   function load() {
-    try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1 && s.set) return s; } catch (e) {}
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY));
+      if (s && s.v === 1 && s.set) {
+        if (!s.set.aim2) { s.set.sling = true; s.set.aim2 = 1; }   // pull-back aiming became the default
+        return s;
+      }
+    } catch (e) {}
     return null;
   }
   function persist() {
@@ -227,7 +233,7 @@
       '<button class="btn" data-act="tocamp">Return to last camp</button>' +
       '<button class="btn" data-act="title">Save and quit to title</button>');
   }
-  function aimLabel() { return 'Aim: ' + (save.set.sling ? 'slingshot (pull back)' : 'swipe (drag forward)'); }
+  function aimLabel() { return 'Aim: ' + (save.set.sling ? 'pull back, like a cue' : 'drag forward'); }
   function soundLabel() { return 'Sound: ' + (save.set.sound ? 'on' : 'off'); }
   function fsLabel() { return 'Fullscreen: ' + (save.set.fs ? 'on' : 'off'); }
   function panel(html) { $('panel-card').innerHTML = html; $('panel-card').scrollTop = 0; show($('panel')); }
@@ -422,7 +428,7 @@
       if (len < C.DRAG_MIN) { aim = null; return; }
       var pow = Math.min(1, len / C.DRAG_FULL), v = pow * sim.mods.vmax, vx = dx / len * v, vy = dy / len * v;
       var pv = S.preview(sim, vx, vy, 0.85);
-      aim = { ok: true, vx: vx, vy: vy, power: pow, pts: pv.pts, hit: pv.hit };
+      aim = { ok: true, vx: vx, vy: vy, power: pow, pts: pv.pts, hit: pv.hit, cue: !!save.set.sling };
     } else if (p.state === 'air') {
       aim = null;
       if (ptr.kind === 'aim') { ptr.kind = 'air'; ptr.t0 = now - 1; ptr.noTap = true; }

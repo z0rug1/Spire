@@ -108,7 +108,7 @@
 
   var hints = {
     start_swipe: 'Drag in the direction you want to leap, then let go.',
-    start_sling: 'Pull back like a slingshot, then let go to leap.',
+    start_sling: 'Pull back like a billiards cue, then let go. The dotted arc shows your leap.',
     grip: 'Hanging drains your grip (the ring around you). Ledges restore it.',
     shard: 'Chalk. Spend it at camps.',
     crumble: "Cracked holds crumble. Don't linger.",

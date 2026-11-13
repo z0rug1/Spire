@@ -518,6 +518,14 @@
 
   function drawAim(sim, aim, P, now) {
     var pts = aim.pts, i, n = pts.length / 2;
+    if (aim.cue) {            // the cue: drawn behind the climber, opposite the leap, longer with more power
+      var b = bodyOf(sim), sp = Math.sqrt(aim.vx * aim.vx + aim.vy * aim.vy) || 1, ux = -aim.vx / sp, uy = -aim.vy / sp;
+      var x0 = b.bx + ux * 26, y0 = b.by + 2 + uy * 26, len = 14 + aim.power * 44;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 6; line(x0, y0, x0 + ux * len, y0 + uy * len);
+      ctx.strokeStyle = P.aim; ctx.lineWidth = 3.4; line(x0, y0, x0 + ux * len, y0 + uy * len);
+      ctx.strokeStyle = '#e5484d'; ctx.lineWidth = 3.4; line(x0, y0, x0 + ux * 5, y0 + uy * 5);
+    }
     for (i = 0; i < n; i++) {
       var a = 1 - i / (n + 2);
       ctx.fillStyle = 'rgba(0,0,0,.35)'; circle(pts[i * 2], pts[i * 2 + 1], 3.3 * a + 1);
