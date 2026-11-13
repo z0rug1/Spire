@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="spire_bg">#0A0D0C</color>
+    <style name="SpireTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/spire_bg</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:statusBarColor">@color/spire_bg</item>
+        <item name="android:navigationBarColor">@color/spire_bg</item>
+    </style>
+</resources>

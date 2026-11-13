@@ -68,6 +68,23 @@ On a phone, open that address and use *Add to Home Screen* to get a fullscreen, 
 
 To run it locally, open `index.html` in a browser. Nothing needs a server.
 
+## Android app
+
+`dist/Spire.apk` is the same game wrapped in a fullscreen Android WebView (Android 5.0 and later).
+Download it on the phone, open it, and allow installing from that source when Android asks.
+Progress in the app is separate from progress in the browser.
+
+To rebuild it after changing the game:
+
+```
+sudo apt install aapt apksigner zipalign dalvik-exchange android-sdk-platform-23 default-jdk
+android/build.sh 2 1.1        # versionCode, versionName: raise the code with every build
+```
+
+The build needs no Gradle or Android Studio. It signs with `android/spire-sideload.keystore`, which
+is kept in the repository on purpose so that every build can update an installed copy without
+losing its save. It is a sideloading key, not a secret, and must not be used for a store release.
+
 ## Project layout
 
 ```
@@ -79,6 +96,8 @@ js/render.js          canvas renderer; every piece of art is drawn in code
 js/audio.js           sound effects and ambience synthesized with WebAudio
 js/game.js            input, camps, daily and endless runs, saving, the main loop
 tests/verify.js       an automated climber that proves towers can be climbed
+android/              the Android wrapper (one activity) and its build script
+dist/Spire.apk        the built Android app
 ```
 
 ## Tests
