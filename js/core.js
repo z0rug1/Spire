@@ -32,16 +32,16 @@
     { key: 'roots', name: 'The Roots', nodes: [9, 11], dy: [58, 100], margin: 0.70, restEvery: 3,
       kinds: { leap: 10, crumble: 2, spring: 3 } },
     { key: 'works', name: 'The Works', nodes: [10, 12], dy: [64, 125], margin: 0.76, restEvery: 3,
-      kinds: { leap: 8, crumble: 2, moving: 3, vent: 4, grapple: 3, tube: 3, lift: 3, drip: 5 }, intro: 'grapple' },
+      kinds: { leap: 8, crumble: 2, moving: 3, vent: 4, grapple: 3, tube: 3, lift: 3, drip: 5, wheel: 2 }, intro: 'grapple' },
     { key: 'gardens', name: 'The Gardens', nodes: [11, 13], dy: [66, 135], margin: 0.80, restEvery: 4,
-      kinds: { leap: 6, slick: 3, wind: 3, updraft: 3, grapple: 2, moving: 2, crumble: 1, spring: 3, phase: 3, bird: 5 }, intro: 'updraft' },
+      kinds: { leap: 6, slick: 3, wind: 3, updraft: 3, grapple: 2, moving: 2, crumble: 1, spring: 3, phase: 3, bird: 5, wheel: 3 }, intro: 'updraft' },
     { key: 'crown', name: 'The Crown', nodes: [11, 13], dy: [70, 145], margin: 0.84, restEvery: 4,
-      kinds: { leap: 5, plate: 4, eplate: 3, grapple: 2, updraft: 2, vent: 2, moving: 2, crumble: 2, phase: 3, lift: 3, tube: 3, drone: 5, switch: 2 }, intro: 'plate' },
+      kinds: { leap: 5, plate: 4, eplate: 3, grapple: 2, updraft: 2, vent: 2, moving: 2, crumble: 2, phase: 3, lift: 3, tube: 3, drone: 5, switch: 2, bell: 2 }, intro: 'plate' },
     // Added later, so their index is not their place in the tower: see ORDER.
     { key: 'cisterns', name: 'The Cisterns', nodes: [10, 12], dy: [60, 110], margin: 0.73, restEvery: 3,
-      kinds: { leap: 8, slick: 3, switch: 4, crumble: 2, moving: 2, spring: 2 }, intro: 'switch' },
+      kinds: { leap: 8, slick: 3, switch: 4, crumble: 2, moving: 2, spring: 2, bell: 3 }, intro: 'switch' },
     { key: 'archive', name: 'The Archive', nodes: [11, 13], dy: [68, 140], margin: 0.82, restEvery: 4,
-      kinds: { leap: 6, switch: 4, phase: 3, lift: 3, updraft: 2, grapple: 2, moving: 2, crumble: 2, wind: 2 }, intro: 'switch' }
+      kinds: { leap: 6, switch: 4, phase: 3, lift: 3, updraft: 2, grapple: 2, moving: 2, crumble: 2, wind: 2, bell: 3, wheel: 2 }, intro: 'switch' }
   ];
   // The districts from the bottom of the tower to the top, and each district's place in that order.
   var ORDER = S.ORDER = [0, 4, 1, 2, 5, 3];
@@ -57,7 +57,18 @@
       var d = ORDER[Math.floor(i / SEGS)], k = i % SEGS;
       MAIN_PLAN.push({ d: d, set: k === 2 ? sets[d] : null, tutorial: i === 0, intro: k === 0, parts: 3 });
     }
+    MAIN_PLAN[MAIN_PLAN.length - 1].set = 'finale';
   })();
+  // New Game+: the same story on a remixed tower, a little harder each time round.
+  S.ngSeed = function (lv) { return lv ? C.SEED + 7919 * lv : C.SEED; };
+  S.ngPlan = function (lv) {
+    if (!lv) return MAIN_PLAN;
+    return MAIN_PLAN.map(function (sp) { var o = {}, k; for (k in sp) o[k] = sp[k]; o.hard = Math.min(1, 0.4 + 0.2 * lv); o.tutorial = false; return o; });
+  };
+  S.ngDrain = function (lv) { return 1 + 0.1 * Math.min(lv || 0, 5); };
+  // The last climb to the Crown Chamber: every tool, while the stair falls away underneath.
+  var FINALE = ['leap', 'switch', 'leap', 'grapple', 'leap', 'wheel', 'leap', 'plate', 'leap', 'bell', 'leap',
+                'updraft', 'leap', 'eplate', 'leap', 'lift', 'leap', 'grapple', 'leap', 'leap'];
   // A tool is handed over at the first camp of its district.
   function firstCamp(d) { for (var i = 0; i < MAIN_PLAN.length; i++) if (MAIN_PLAN[i].d === d) return i; return 1e9; }
   S.TOOL_AT = { grapple: firstCamp(1), glider: firstCamp(2), gloves: firstCamp(3) };
@@ -99,12 +110,22 @@
   /* ---------- time-dependent pieces (pure functions of sim time) ---------- */
   // 0 at the bottom, 1 at the top; the hook waits a moment at each end before it travels
   function liftS(h, t) { var v = 0.5 - 0.8 * Math.cos(h.w * t + h.ph); return v < 0 ? 0 : v > 1 ? 1 : v; }
+  // wheel spokes ride a circle: at the bottom when the angle is 0, at the top at half a turn
+  function wheelA(h, t) { return h.w * t + h.ph + h.k * 1.5708; }
   function holdX(h, t) {
     if (h.type === 'moving') return h.x0 + h.amp * Math.sin(h.w * t + h.ph);
     if (h.type === 'lift') return h.x0 + h.ax * liftS(h, t);
+    if (h.type === 'wheel') return h.cx0 + h.rad * Math.sin(wheelA(h, t));
     return h.x;
   }
-  function holdY(h, t) { return h.type === 'lift' ? h.y0 + h.ay * liftS(h, t) : h.y; }
+  function holdY(h, t) {
+    if (h.type === 'lift') return h.y0 + h.ay * liftS(h, t);
+    if (h.type === 'wheel') return h.cy0 - h.rad * Math.cos(wheelA(h, t));
+    return h.y;
+  }
+  // seconds a bell-timed hold has left (0 or less: not solid)
+  function timedLeft(sim, h) { var b = sim.bell[h.g]; return b == null ? -1 : h.dur - (sim.t - b); }
+  S.timedLeft = timedLeft;
   function cyc(o, t) { return (t + o.ph) % o.period; }
   function ventOn(v, t) { return cyc(v, t) < v.dur; }
   function ventWarn(v, t) { return cyc(v, t) > v.period - 0.6; }
@@ -133,7 +154,7 @@
     function R(a, b) { return a + (b - a) * rnd(); }
     function RI(a, b) { return Math.floor(R(a, b + 1)); }
 
-    var W = { holds: [], vents: [], winds: [], drafts: [], shards: [], camps: [], anchors: [], springs: [], tubes: [], mobs: [],
+    var W = { holds: [], vents: [], winds: [], drafts: [], shards: [], camps: [], anchors: [], springs: [], tubes: [], mobs: [], bells: 0, letters: [], keys: [],
               gates: [], bands: [], sets: [], rises: [], segs: 0 };
     var mainIdx = 0, seg = 0, dist = 0;
     var gsw = 0;                   // where the sluice switches stand when the climber gets here along the route
@@ -164,10 +185,11 @@
       if (h.type === 'anchor') W.anchors.push(h.id);
       return h;
     }
-    function cx(h) { return h.type === 'moving' ? h.x0 : h.type === 'lift' ? h.x0 + h.ax : h.x; }
+    function cx(h) { return h.type === 'moving' ? h.x0 : h.type === 'lift' ? h.x0 + h.ax : h.type === 'wheel' ? h.cx0 : h.x; }
     function srcPts(h) {
       if (h.type === 'moving') return [[h.x0 - h.amp, h.y], [h.x0 + h.amp, h.y]];
       if (h.type === 'lift') return [[h.x0 + h.ax, h.y0 + h.ay]];
+      if (h.type === 'wheel') return [[h.cx0, h.cy0 + h.rad]];
       if (h.type === 'ledge') return [[h.x, h.y + 15]];
       if (h.type === 'camp') return [[h.x - (h.biv ? 36 : 60), h.y + 15], [h.x + (h.biv ? 36 : 60), h.y + 15]];
       if (h.type === 'plate') return [[h.x, h.y1 - 14]];
@@ -176,11 +198,12 @@
     function dstPts(h) {
       if (h.type === 'moving') return [[h.x0 - h.amp, h.y], [h.x0 + h.amp, h.y]];
       if (h.type === 'lift') return [[h.x0, h.y0]];
+      if (h.type === 'wheel') return [[h.cx0, h.cy0 - h.rad]];
       if (h.type === 'plate') return [[h.x, h.y0 + 34]];
       return [[h.x, h.y]];
     }
     function top(h) { return srcPts(h)[0][1]; }
-    function hy(h) { return h.type === 'lift' ? h.y0 : h.y; }     // where you first catch it
+    function hy(h) { return h.type === 'lift' ? h.y0 : h.type === 'wheel' ? h.cy0 - h.rad : h.y; }     // where you first catch it
     // Can a leap at m * VMAX get from (sx,sy) to (tx,ty)?  Minimum-speed ballistic condition.
     function ok(sx, sy, tx, ty, m) {
       var dy = ty - sy, dx = tx - sx, v = m * C.VMAX;
@@ -320,8 +343,10 @@
     }
 
     // One stretch of generated climbing: n holds chosen by the district's rules.
-    function standard(sp, cfg, tutorial, intro) {
-      var n = tutorial ? 7 : (sp.n || RI(cfg.nodes[0], cfg.nodes[1]));
+    // A hold you cannot stay on while waiting for something to line up.
+    function noWait(h) { return h.type === 'phase' || h.type === 'crumble' || h.type === 'timed' || h.type === 'plate' || h.type === 'slick' || h.type === 'lift' || h.type === 'wheel'; }
+    function standard(sp, cfg, tutorial, intro, script) {
+      var n = script ? 1e9 : tutorial ? 7 : (sp.n || RI(cfg.nodes[0], cfg.nodes[1])), si = 0;
       var m = tutorial ? 0.6 : Math.min(0.9, cfg.margin + 0.06 * (sp.hard || 0));
       var restEvery = tutorial ? 2 : cfg.restEvery;
       var dyR = tutorial ? [55, 78] : cfg.dy;
@@ -329,17 +354,19 @@
       var j, nxt, prev, t0, c1, sdir;
       sinceRest = 0; count = 0;
 
-      while (count < n) {
+      while (script ? si < script.length : count < n) {
         var kind = 'leap';
-        if (count === 1 && forced) { kind = forced; forced = null; }
+        if (script) kind = script[si++];
+        else if (count === 1 && forced) { kind = forced; forced = null; }
         else if (!tutorial && count > 0) kind = pick(cfg.kinds);
         var needRest = sinceRest >= restEvery;
         if (needRest && kind !== 'updraft' && kind !== 'spring' && kind !== 'tube' && kind !== 'vent' && kind !== 'drip' && kind !== 'bird' && kind !== 'drone') kind = 'leap';
         if (windLeft > 0 && (kind === 'spring' || kind === 'tube' || kind === 'lift')) kind = 'leap';
         // nothing that needs timing may follow a hold you cannot wait on
-        if ((cur.type === 'phase' || cur.type === 'crumble') && kind !== 'spring' && kind !== 'tube') kind = 'leap';
+        if ((cur.type === 'phase' || cur.type === 'crumble' || cur.type === 'timed') && kind !== 'spring' && kind !== 'tube') kind = 'leap';
+        if ((kind === 'wheel' || kind === 'bell') && (needRest || noWait(cur) || windLeft > 0)) kind = 'leap';
         // a lift has to be waited for, so never hang it after a hold you cannot wait on
-        if (kind === 'lift' && (cur.type === 'plate' || cur.type === 'crumble' || cur.type === 'phase' || cur.type === 'slick' || cur.type === 'lift')) kind = 'leap';
+        if (kind === 'lift' && noWait(cur)) kind = 'leap';
         var mm = m;
         if (windLeft > 0) { mm = m - 0.1; windLeft--; }
 
@@ -350,7 +377,7 @@
         }
 
         var isMob = kind === 'drip' || kind === 'bird' || kind === 'drone';
-        if (isMob && (cur.type === 'plate' || cur.type === 'slick' || cur.type === 'lift' || windLeft > 0)) { kind = 'leap'; isMob = false; }
+        if (isMob && (noWait(cur) || windLeft > 0)) { kind = 'leap'; isMob = false; }
         if (kind === 'leap' || kind === 'vent' || kind === 'slick' || isMob) {
           var type = needRest ? 'ledge' : (kind === 'slick' ? 'slick' : 'grip');
           var range = (kind === 'vent' || kind === 'bird') ? [Math.max(dyR[0], 76), dyR[1]] : dyR;
@@ -370,8 +397,26 @@
             advance(nxt);
           }
         } else if (kind === 'switch') {
-          if (needRest || cur.type === 'phase' || cur.type === 'crumble' || cur.type === 'plate' || cur.type === 'lift') { advance(place(cur, needRest ? 'ledge' : 'grip', mm, dyR)); }
+          if (needRest || noWait(cur)) { advance(place(cur, needRest ? 'ledge' : 'grip', mm, dyR)); }
           else switchRun(mm, dyR);
+        } else if (kind === 'wheel') {
+          // a mill wheel with four handholds: catch one at the bottom, ride it up, leap off at the top
+          t0 = top(cur); c1 = cx(cur);
+          var rw = R(62, 78), wx = clamp(c1 + (c1 < 180 ? 1 : -1) * R(50, 100), rw + 26, C.W - rw - 26), wby = t0 + R(26, 56);
+          var wh = { type: 'wheel', cx0: wx, cy0: wby + rw, rad: rw, w: 6.283 / R(8, 9.5), ph: R(0, 6.28), k: 0, r: 13, x: wx, y: wby + rw };
+          if (!reach(cur, wh, Math.min(0.9, mm + 0.06)) || mobNear(wx, wby + rw) || nearVent(wby + rw)) advance(place(cur, 'grip', mm, dyR));
+          else {
+            advance(wh);
+            for (j = 1; j < 4; j++) { var sk = {}, kk; for (kk in wh) sk[kk] = wh[kk]; sk.k = j; commit(sk, true); sk.main = wh.main; }
+            shard(wx, wby + rw, 1);
+          }
+        } else if (kind === 'bell') {
+          // a bell: let go of it and the holds that answer it are solid for a few seconds
+          var bl = place(cur, 'grip', mm, dyR), nb = 2 + (rnd() < 0.5 ? 1 : 0), tms = [];
+          bl.type = 'bell'; bl.g = W.bells++; bl.r = 13;
+          advance(bl);
+          for (j = 0; j < nb; j++) { var tm = place(cur, 'timed', mm, [dyR[0], Math.min(dyR[1], 110)]); tm.g = bl.g; tms.push(tm); if (rnd() < 0.5) between(cur, tm); advance(tm); }
+          for (j = 0; j < tms.length; j++) tms[j].dur = 1.5 * nb + 1.9;
         } else if (kind === 'moving' || kind === 'phase') {
           advance(place(cur, kind, mm, dyR));
         } else if (kind === 'lift') {
@@ -435,7 +480,7 @@
           advance(an);
           ledgeAt(180 + sd * R(50, 70), cur.y + R(80, 88), 30);
         }
-        rise = { id: W.rises.length, yTrig: trig.y, yEnd: 0, speed: sp.riseSpeed || 25, lead: 260 };
+        rise = { id: W.rises.length, yTrig: trig.y, yEnd: 0, speed: sp.riseSpeed || 25, lead: 260, style: 'slag' };
         W.rises.push(rise);
       } else if (sp.set === 'storm') {
         // The Thermal Ladder: ride three updrafts in a row without landing, twice.
@@ -490,6 +535,12 @@
           ledgeAt(clamp(cx(cur) + R(-40, 40), 60, 300), cur.y + R(74, 86), 30);
           shard(cur.x + 30, cur.y + 60, 1);
         }
+      } else if (sp.set === 'finale') {
+        // The Last Stair: the whole climb in one breath, while the stair collapses below you.
+        var trig2 = ledgeAt(180, top(cur) + 78, 36);
+        rise = { id: W.rises.length, yTrig: trig2.y, yEnd: 0, speed: 18, lead: 330, style: 'collapse' };
+        W.rises.push(rise);
+        standard(sp, cfg, false, false, FINALE);
       } else if (sp.set === 'alt') {
         // The Alternator: left and right plates take turns going live.
         ledgeAt(180, top(cur) + 78, 32);
@@ -516,6 +567,31 @@
       W.top = cy; W.segs = ++seg;
     }
 
+    // Twenty lost letters on side routes, spread evenly up the tower. Every third one is locked in a
+    // strongbox; its key lies on another side route somewhere below it.
+    function placeLore() {
+      var cand = W.holds.filter(function (h) {
+        if (!h.side || (h.type !== 'grip' && h.type !== 'gate') || h.seg < 1) return false;
+        for (var i = 0; i < W.sets.length; i++) if (h.y > W.sets[i].y0 - 60 && h.y < W.sets[i].y1 + 60) return false;
+        return true;
+      }).sort(function (a, b) { return a.y - b.y; });
+      var N = 20, used = {}, spots = [], i, k;
+      if (cand.length < N * 2) return;
+      for (i = 0; i < N; i++) { k = Math.floor((i + 0.5) * cand.length / N); spots.push(k); used[k] = 1; }
+      for (i = 0; i < N; i++) {
+        var h = cand[spots[i]];
+        if (i % 3 === 2) {
+          h.box = i;
+          W.letters.push({ id: i, x: h.x, y: h.y, box: h.id });
+          var lo = spots[i - 1] + 1, km = Math.floor((lo + spots[i]) / 2);
+          while (used[km] && km < spots[i] - 1) km++;
+          if (used[km]) km = lo;
+          used[km] = 1;
+          W.keys.push({ id: W.keys.length, x: cand[km].x, y: cand[km].y + 4, box: i });
+        } else W.letters.push({ id: i, x: h.x, y: h.y + 4, box: -1 });
+      }
+    }
+
     // spatial buckets
     var B = W.B = 240;
     W.bucketOf = function (y) { var b = Math.floor((y + 480) / B); return b < 0 ? 0 : b; };
@@ -523,10 +599,11 @@
       for (var b = W.bucketOf(y0); b <= W.bucketOf(y1); b++) (grid[b] || (grid[b] = [])).push(id);
     }
     function index() {
-      var g = W.grid = { holds: [], vents: [], winds: [], drafts: [], shards: [], springs: [], tubes: [], mobs: [] };
+      var g = W.grid = { holds: [], vents: [], winds: [], drafts: [], shards: [], springs: [], tubes: [], mobs: [], lore: [] };
       W.holds.forEach(function (h) {
         if (h.type === 'plate') put(g.holds, h.y0 - 30, h.y1 + 30, h.id);
         else if (h.type === 'lift') put(g.holds, h.y0 - 60, h.y0 + h.ay + 60, h.id);
+        else if (h.type === 'wheel') put(g.holds, h.cy0 - h.rad - 60, h.cy0 + h.rad + 60, h.id);
         else put(g.holds, h.y - 60, h.y + 60, h.id);
       });
       W.vents.forEach(function (v) { put(g.vents, v.y - 40, v.y + 40, v.id); });
@@ -535,6 +612,8 @@
       W.shards.forEach(function (sh) { put(g.shards, sh.y - 40, sh.y + 40, sh.id); });
       W.springs.forEach(function (s) { put(g.springs, s.y - 40, s.y + 40, s.id); });
       W.tubes.forEach(function (tb) { put(g.tubes, tb.ay - 40, tb.ay + 40, tb.id); });
+      W.letters.forEach(function (l, i) { if (l.box < 0) put(g.lore, l.y - 40, l.y + 40, i); });
+      W.keys.forEach(function (k, i) { put(g.lore, k.y - 40, k.y + 40, -1 - i); });
       W.mobs.forEach(function (m) {
         if (m.kind === 'drip') put(g.mobs, m.y - m.fall - 30, m.y + 30, m.id);
         else if (m.kind === 'bird') put(g.mobs, m.y - 40, m.y + 40, m.id);
@@ -544,6 +623,7 @@
 
     for (var i = 0; i < plan.length; i++)
       buildSeg(plan[i], plan[i + 1] ? plan[i + 1].d : (plan[i].nd != null ? plan[i].nd : plan[i].d), i === plan.length - 1);
+    if (opts.lore) placeLore();
     index();
     // Endless towers grow: add one more segment on top.
     W.extend = function (sp, nd) { buildSeg(sp, nd, false); index(); };
@@ -589,7 +669,8 @@
       world: world, t: 0, ghost: false, events: [],
       tools: o.tools || { grapple: false, glider: false, gloves: false },
       mods: o.mods || { stMax: C.ST_MAX, vmax: C.VMAX, drain: 1, pitonMax: 2 },
-      crumble: {}, taken: o.taken || {}, rise: { on: false, id: -1, level: -1e9 }, sw: 0, cpSw: 0,
+      crumble: {}, taken: o.taken || {}, rise: { on: false, id: -1, level: -1e9 }, sw: 0, cpSw: 0, bell: {},
+      lore: o.lore || { letters: {}, keys: {}, boxes: {}, held: 0 },
       checkpoint: o.checkpoint != null ? o.checkpoint : world.camps[0].hold,
       pitons: 0, pitonHold: -1,
       p: { x: 0, y: 0, vx: 0, vy: 0, state: 'hold', hold: -1, stamina: C.ST_MAX, lastHold: -1, lastHoldT: -9,
@@ -614,6 +695,10 @@
     p.apexY = p.y;
     if (h.type === 'crumble') sim.crumble[h.id] = { t0: sim.t, back: 0 };
     if (h.type === 'switch' && !sim.respawning) { sim.sw ^= 1; ev(sim, 'switch', h.id); }
+    if (h.box != null && !sim.ghost && !sim.respawning && !sim.lore.boxes[h.box]) {
+      if (sim.lore.held > 0) { sim.lore.held--; sim.lore.boxes[h.box] = 1; sim.lore.letters[h.box] = 1; ev(sim, 'box', h.box); }
+      else ev(sim, 'locked', h.box);
+    }
     if (h.type === 'camp') {
       sim.checkpoint = h.id; sim.pitonHold = -1; sim.pitons = sim.mods.pitonMax;
       sim.sw = h.sw || 0;
@@ -621,13 +706,14 @@
     }
   }
   function detach(sim) {
-    var p = sim.p;
+    var p = sim.p, h = sim.world.holds[p.hold];
+    if (h && h.type === 'bell') { sim.bell[h.g] = sim.t; ev(sim, 'bell', h.id); }
     p.lastHold = p.hold; p.lastHoldT = sim.t; p.hold = -1; p.state = 'air'; p.apexY = p.y;
   }
 
   function respawn(sim) {
     var p = sim.p, h = sim.world.holds[sim.checkpoint];
-    sim.crumble = {}; sim.rise = { on: false, id: -1, level: -1e9 };
+    sim.crumble = {}; sim.rise = { on: false, id: -1, level: -1e9 }; sim.bell = {};
     p.lastHold = -1; p.lastHoldT = -9; p.noGrabT = 0; p.wantGlide = false; p.steer = 0; p.hitT = -9;
     p.springT = -9; p.tubeT = -9;
     p.stamina = sim.mods.stMax;
@@ -713,6 +799,9 @@
       case 'gate':
         if (sim.sw !== h.col) return false;
         break;
+      case 'timed':
+        if (timedLeft(sim, h) <= 0) return false;
+        break;
       case 'crumble':
         var c = sim.crumble[h.id];
         if (c && c.back > t) return false;
@@ -766,6 +855,13 @@
       break;
     }
     if (sim.ghost) return;
+    list = W.grid.lore[b];
+    if (list) for (i = 0; i < list.length; i++) {
+      var li = list[i], it = li >= 0 ? W.letters[li] : W.keys[-1 - li], lx = it.x - p.x, ly = it.y - p.y;
+      if (lx * lx + ly * ly > C.SHARD_R * C.SHARD_R) continue;
+      if (li >= 0 && !sim.lore.letters[it.id]) { sim.lore.letters[it.id] = 1; ev(sim, 'letter', it.id); }
+      else if (li < 0 && !sim.lore.keys[it.id]) { sim.lore.keys[it.id] = 1; sim.lore.held++; ev(sim, 'key', it.id); }
+    }
     list = W.grid.shards[b];
     if (list) for (i = 0; i < list.length; i++) {
       var s = W.shards[list[i]];
@@ -820,11 +916,11 @@
         for (i = W.rises.length - 1; i >= 0; i--) {
           var z = W.rises[i];
           if (p.y >= z.yEnd) break;
-          if (p.y > z.yTrig + 24) { rs.on = true; rs.id = i; rs.level = p.y - z.lead; ev(sim, 'rise'); break; }
+          if (p.y > z.yTrig + 24) { rs.on = true; rs.id = i; rs.level = p.y - z.lead; ev(sim, 'rise', z.style); break; }
         }
       } else {
         if (rs.level < rz.yEnd) rs.level = Math.min(rz.yEnd, rs.level + rz.speed * (sim.mods.riseK || 1) * dt);
-        if (p.y < rs.level + 4) { die(sim, p.x, p.y); ev(sim, 'burn'); return; }
+        if (p.y < rs.level + 4) { die(sim, p.x, p.y); ev(sim, 'burn', rz.style); return; }
         if (p.y > rz.yEnd + 500) rs.on = false;       // well clear of it: the next shaft can start
       }
     }
@@ -833,11 +929,11 @@
     if (p.state === 'hold') {
       h = W.holds[p.hold];
       if (h.type === 'moving') p.x = holdX(h, t);
-      else if (h.type === 'lift') { p.x = holdX(h, t); p.y = holdY(h, t); }
+      else if (h.type === 'lift' || h.type === 'wheel') { p.x = holdX(h, t); p.y = holdY(h, t); }
       if (h.type === 'ledge' || h.type === 'camp') {
         p.stamina = Math.min(sim.mods.stMax, p.stamina + C.ST_REST * (h.type === 'camp' ? 2 : 1) * dt);
       } else {
-        p.stamina -= C.ST_DRAIN * thin(W, h) * sim.mods.drain * (h.type === 'slick' ? 2.5 : h.type === 'lift' ? 0.5 : 1) * dt;
+        p.stamina -= C.ST_DRAIN * thin(W, h) * sim.mods.drain * (h.type === 'slick' ? 2.5 : h.type === 'lift' || h.type === 'wheel' ? 0.5 : 1) * dt;
         if (p.stamina <= 0) {
           detach(sim); p.vx = 0; p.vy = -30; p.noGrabT = t + 0.5;
           p.stamina = p.secondWind ? 15 : 5; p.secondWind = false;
@@ -853,6 +949,7 @@
       }
       if (h.type === 'phase' && !phaseOn(h, t)) { drop(sim, 'phaseout', h.id); return; }
       if (h.type === 'gate' && sim.sw !== h.col) { drop(sim, 'phaseout', h.id); return; }
+      if (h.type === 'timed' && timedLeft(sim, h) <= 0) { drop(sim, 'phaseout', h.id); return; }
       if (h.type === 'plate' && plateOn(h, t) && !sim.mods.insulated) {
         detach(sim);
         p.vx = (p.x < C.W / 2 ? 1 : -1) * 160; p.vy = -40; p.noGrabT = t + 0.5; p.hitT = t;
@@ -927,7 +1024,8 @@
   function cloneSim(s) {
     var c = { world: s.world, t: s.t, ghost: true, events: [], tools: s.tools, mods: s.mods, crumble: {},
               taken: s.taken, checkpoint: s.checkpoint, pitons: s.pitons, pitonHold: s.pitonHold, p: {},
-              rise: { on: s.rise.on, id: s.rise.id, level: s.rise.level }, sw: s.sw, cpSw: s.cpSw }, k;
+              rise: { on: s.rise.on, id: s.rise.id, level: s.rise.level }, sw: s.sw, cpSw: s.cpSw, bell: {}, lore: s.lore }, k;
+    for (k in s.bell) c.bell[k] = s.bell[k];
     for (k in s.p) c.p[k] = s.p[k];
     for (k in s.crumble) c.crumble[k] = { t0: s.crumble[k].t0, back: s.crumble[k].back };
     return c;

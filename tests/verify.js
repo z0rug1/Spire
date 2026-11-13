@@ -18,6 +18,8 @@ function climb(world, opt) {
   const mainHolds = [];
   world.holds.forEach(h => { if (!h.side) mainHolds[h.main] = h; });
   const sim = S.createSim(world, { tools: opt.allTools ? { grapple: true, glider: true, gloves: true } : undefined });
+  const drainK = opt.drainK || 1;
+  sim.mods.drain = drainK;
   let maxCamp = 0;
 
   function score(s) {
@@ -56,7 +58,7 @@ function climb(world, opt) {
 
   const ANGLES = []; for (let d = 15; d <= 165; d += 5) ANGLES.push(d * Math.PI / 180);
   const POWERS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-  const WAITS = []; for (let w = 0; w <= 6.0001; w += 0.2) WAITS.push(w);
+  const WAITS = []; for (let w = 0; w <= 10.0001; w += 0.2) WAITS.push(w);
 
   function decide(s) {
     const cur = score(s), h = world.holds[s.p.hold], next = mainHolds[h.main + 1];
@@ -113,7 +115,7 @@ function climb(world, opt) {
       if (chalk < cost) break;
       chalk -= cost; upg[u.id]++; oi++; res.bought.push(`${u.id} ${upg[u.id]} at camp ${camp}`);
     }
-    sim.mods.stMax = C.ST_MAX + 20 * upg.lungs; sim.mods.vmax = C.VMAX * (1 + 0.05 * upg.legs); sim.mods.drain = 1 - 0.15 * upg.hands;
+    sim.mods.stMax = C.ST_MAX + 20 * upg.lungs; sim.mods.vmax = C.VMAX * (1 + 0.05 * upg.legs); sim.mods.drain = (1 - 0.15 * upg.hands) * drainK;
   };
   while (sim.p.hold !== summit) {
     const h = world.holds[sim.p.hold];
@@ -127,7 +129,7 @@ function climb(world, opt) {
     }
     if (think > 0 && h.type !== 'ledge' && h.type !== 'camp') {
       // nobody lingers on a hold that is about to vanish or go live
-      const hurry = h.type === 'phase' || h.type === 'crumble' || (h.type === 'plate' && h.elec);
+      const hurry = h.type === 'phase' || h.type === 'crumble' || h.type === 'timed' || (h.type === 'plate' && h.elec);
       const n = Math.round((hurry ? 0 : think) / C.DT);
       for (let i = 0; i < n && sim.p.state === 'hold'; i++) S.step(sim, C.DT);
       if (sim.p.state !== 'hold' || sim.p.hold !== h.id) {
@@ -156,7 +158,7 @@ function climb(world, opt) {
 
 /* ---------- main tower ---------- */
 const t0 = Date.now();
-const world = S.generate();
+const world = S.generate(C.SEED, S.MAIN_PLAN, { lore: true });
 // Three climbers. The expert aims in half a second and buys nothing: if they can finish, nobody can
 // get stuck for good. The average climber takes 1.6 s per hold: without upgrades they must fail (so
 // upgrades matter), and buying upgrades with the chalk found on the way they must finish.
@@ -175,7 +177,8 @@ console.log(`  bot          : ${r.leaps} leaps, ${(r.sim.t / 60).toFixed(1)} min
 console.log('  holds        :', JSON.stringify(count));
 console.log(`  hazards      : ${world.vents.length} vents, ${world.winds.length} wind bands, ${world.drafts.length} updrafts, ${world.springs.length} bounce caps, ${world.tubes.length} tubes, ${world.mobs.length} moving hazards (${['drip', 'bird', 'drone'].map(k => world.mobs.filter(m => m.kind === k).length + ' ' + k).join(', ')})`);
 console.log(`  set pieces   : ${world.sets.map(s => s.type + ' ' + Math.round(s.y0 * C.M_PER_UNIT) + '-' + Math.round(s.y1 * C.M_PER_UNIT) + ' m').join(', ')}`);
-console.log(`  chalk        : ${chalk} across ${world.shards.length} shards`);
+console.log(`  chalk        : ${chalk} across ${world.shards.length} shards; ${world.letters.length} letters, ${world.keys.length} keys`);
+console.log(`  puzzles      : ${world.holds.filter(h => h.type === 'switch').length} levers, ${world.bells} bells, ${world.holds.filter(h => h.type === 'wheel' && !h.side).length} wheels`);
 console.log(`  gates (m)    : ${world.gates.map(g => Math.round(g * C.M_PER_UNIT)).join(', ')}`);
 console.log(`  leap leniency: median ${r.ways[r.ways.length >> 1]} launch options per leap, 10th percentile ${r.ways[Math.floor(r.ways.length * 0.1)]}; ${r.waited} leaps needed timing`);
 if (r.tight.length) { console.log(`  tight spots (${r.tight.length}):`); r.tight.forEach(t => console.log('    ' + t)); }
@@ -222,4 +225,13 @@ if (nEnd) {
   const re = climb(w, { allTools: true, quiet: !verbose, think: EXPERT });
   if (!re.ok) { console.error(`Endless climb: STUCK at ${re.stuck}`); process.exit(1); }
   console.log(`Endless climb: first ${nEnd} segments climbable, ${Math.round(w.top * C.M_PER_UNIT)} m, ${re.leaps} leaps (${((Date.now() - t2) / 1000).toFixed(0)} s)`);
+}
+
+/* ---------- New Game+ towers ---------- */
+const nNg = +arg('--ng') || 0;
+for (let lv = 1; lv <= nNg; lv++) {
+  const t3 = Date.now(), w = S.generate(S.ngSeed(lv), S.ngPlan(lv), { lore: true });
+  const rn = climb(w, { think: EXPERT, drainK: S.ngDrain(lv), allTools: true, quiet: true });
+  if (!rn.ok) { console.error(`New Game+ ${lv}: STUCK at ${rn.stuck}`); process.exit(1); }
+  console.log(`New Game+ ${lv}: climbable by an expert with all tools and no upgrades, ${Math.round(w.top * C.M_PER_UNIT)} m, ${rn.leaps} leaps (${((Date.now() - t3) / 1000).toFixed(0)} s)`);
 }
