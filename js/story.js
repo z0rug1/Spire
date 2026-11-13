@@ -124,6 +124,9 @@
     tube: 'Drop into a green funnel and the tube fires you out of its far end.',
     lift: 'Hooks ride up and down their rail and wait a moment at each end. Catch one, then leap off at the top.',
     phase: 'These holds come and go. A flicker means one is about to vanish.',
+    drip: 'Slag drips on a rhythm. Leap through the gap between drops.',
+    bird: 'Wall-swifts fly a fixed beat and will knock you off. Let one pass, then go.',
+    drone: 'Patrol drones ride a rail. Touching one costs you grip and your hold.',
     biv: 'A bivouac. Your climb is saved here too.',
     piton: 'Tap the piton button on a hold to set a checkpoint there.',
     camp: 'Camp reached. Your climb is saved here.'
@@ -179,6 +182,50 @@
     return out;
   }
 
-  S.Story = { camps: camps, hints: hints, sets: sets, upgrades: upgrades, endings: endings, epilogue: epilogue };
+  // Perks offered at every second camp of the endless climb. max is how many times one can be taken.
+  var perks = [
+    { id: 'hop', name: 'Air hop', desc: 'Tap mid-air to kick upward, once per leap', max: 2 },
+    { id: 'line', name: 'Long line', desc: 'The grapple reaches 35% further', max: 2 },
+    { id: 'grip', name: 'Iron grip', desc: 'Grip drains 25% slower', max: 3 },
+    { id: 'lungs', name: 'Deep lungs', desc: '+30 grip', max: 3 },
+    { id: 'legs', name: 'Spring legs', desc: '+7% leap power', max: 3 },
+    { id: 'rope', name: 'Spare rope', desc: 'One more rope, right now', max: 99 },
+    { id: 'cool', name: 'Cool head', desc: 'Slag rises 30% slower', max: 2 },
+    { id: 'feather', name: 'Featherfall', desc: 'You survive falls half as long again', max: 2 },
+    { id: 'kite', name: 'Light silk', desc: 'Gliding costs half the grip', max: 2 },
+    { id: 'rubber', name: 'Rubber soles', desc: 'Live plates and drones cannot shock you', max: 1 },
+    { id: 'calm', name: 'Steady nerves', desc: 'Cracked holds last 60% longer', max: 1 }
+  ];
+
+  // Things the camp tailor sells for chalk. They change how you look, never how you climb.
+  var looks = {
+    scarf: [
+      { id: 'red', name: 'Courier red', col: '#e5484d', cost: 0 }, { id: 'teal', name: 'Fungus teal', col: '#3fd0b0', cost: 10 },
+      { id: 'gold', name: 'Guild gold', col: '#f2c94c', cost: 15 }, { id: 'violet', name: 'Curator violet', col: '#a779e0', cost: 15 },
+      { id: 'rose', name: 'Bloom rose', col: '#f07aa5', cost: 20 }, { id: 'white', name: 'Chalk white', col: '#f3efe4', cost: 20 },
+      { id: 'ink', name: 'Crown ink', col: '#4a5fa8', cost: 20 }
+    ],
+    wing: [
+      { id: 'silk', name: 'Seed silk', col: '#f4ecd2', rib: 'rgba(120,100,60,.7)', cost: 0 },
+      { id: 'leaf', name: 'Leaf', col: '#8fd07a', rib: 'rgba(40,80,40,.8)', cost: 30 },
+      { id: 'dusk', name: 'Dusk', col: '#f0935a', rib: 'rgba(110,40,20,.8)', cost: 30 },
+      { id: 'night', name: 'Night', col: '#2b3560', rib: 'rgba(201,165,74,.9)', cost: 40 }
+    ],
+    trail: [
+      { id: 'none', name: 'None', col: 'transparent', cost: 0 }, { id: 'sparks', name: 'Sparks', col: '#ffe08a', cost: 40 },
+      { id: 'petals', name: 'Petals', col: '#f3b6c6', cost: 40 }, { id: 'embers', name: 'Embers', col: '#ff8a3c', cost: 40 },
+      { id: 'frost', name: 'Frost', col: '#bfeaff', cost: 50 }
+    ]
+  };
+
+  // Modifiers for challenge climbs, which open once the story has an ending.
+  var challenges = [
+    { id: 'nopiton', name: 'No pitons', desc: 'Camps and bivouacs are your only checkpoints' },
+    { id: 'dark', name: 'Lights out', desc: 'The whole tower is as dark as the Blackout' },
+    { id: 'thin', name: 'Thin air', desc: 'Grip drains a third faster' }
+  ];
+
+  S.Story = { camps: camps, hints: hints, sets: sets, upgrades: upgrades, endings: endings, epilogue: epilogue,
+              perks: perks, looks: looks, challenges: challenges };
   if (typeof module !== 'undefined' && module.exports) module.exports = S;
 })(typeof window !== 'undefined' ? window : globalThis);

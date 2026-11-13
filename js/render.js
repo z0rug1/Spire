@@ -100,6 +100,7 @@
       cam.sx = (Math.random() - 0.5) * cam.shake * 2; cam.sy = (Math.random() - 0.5) * cam.shake * 2;
     } else { cam.sx = cam.sy = 0; }
     updateParts(dt, sim);
+    updateRig(dt, sim, aim);
     updateScarf(dt, sim);
   }
   function snap(sim, mode) {
@@ -107,7 +108,8 @@
     kk = sc * cam.z; viewH = ch / kk; viewW = C.W / cam.z;
     cam.y = sim.p.y + 90 / cam.z; cam.bottom = Math.max(-240, cam.y - viewH * cam.f);
     cam.x = S.clamp(sim.p.x - viewW / 2, 0, C.W - viewW);
-    scarf.length = 0;
+    scarf.length = 0; rig.init = false; rig.prev = sim.p.state; corpse = null;
+    rig.cx = sim.p.x; rig.cy = sim.p.y;
   }
 
   /* ---------- particles ---------- */
@@ -348,7 +350,7 @@
       case 'anchor':
         ctx.fillStyle = 'rgba(0,0,0,.45)'; rrect(x - 7, y + 6, 14, 12, 3); ctx.fill();
         if (sim.tools.grapple) {
-          var dx = x - p.x, dy = y - p.y, inR = dx * dx + dy * dy <= C.GRAPPLE_R * C.GRAPPLE_R && p.hold !== h.id;
+          var dx = x - p.x, dy = y - p.y, GR = sim.mods.grapR || C.GRAPPLE_R, inR = dx * dx + dy * dy <= GR * GR && p.hold !== h.id;
           if (inR) light('#ffe9a8', x, y, 26 + 4 * Math.sin(now * 6), 0.7);
         }
         ctx.strokeStyle = '#1a1408'; ctx.lineWidth = 5.5; ctx.beginPath(); ctx.arc(x, y, 10, 0, TAU); ctx.stroke();
@@ -608,11 +610,90 @@
   }
 
   /* ---------- the climber ---------- */
+  // The climber is drawn from a small rig: a body centre offset from the physics point, four limb
+  // ends, a lean and a stretch. Each pose sets targets and the rig eases toward them, so poses
+  // blend instead of snapping.
+  var rig = { init: false, ox: 0, oy: 0, j: [0, 0, 0, 0, 0, 0, 0, 0], lean: 0, squash: 0, launch: 0, wing: 0,
+              prev: '', cx: 0, cy: 0, pose: 'stand', blinkT: 2 };
+  var TJ = [0, 0, 0, 0, 0, 0, 0, 0];
+  var corpse = null;
+  var look = { scarf: '#e5484d', wing: '#f4ecd2', rib: 'rgba(120,100,60,.7)', trail: null };
+
+  function poseOf(sim) {
+    var p = sim.p, h = p.state === 'hold' ? sim.world.holds[p.hold] : null;
+    if (h) return (h.type === 'ledge' || h.type === 'camp') ? 'stand' : h.type === 'plate' ? 'cling' : 'hang';
+    return p.state === 'zip' ? 'zip' : p.gliding ? 'glide' : p.vy > 0 ? 'rise' : 'fall';
+  }
+  function setJ(a, b, c, d, e, f, g, h) { TJ[0] = a; TJ[1] = b; TJ[2] = c; TJ[3] = d; TJ[4] = e; TJ[5] = f; TJ[6] = g; TJ[7] = h; }
+  function updateRig(dt, sim, aim) {
+    var p = sim.p, pose = poseOf(sim), f = p.face, t = sim.t, i, k;
+    var ax = 0, ay = 0, pw = 0, tox = 0, toy = 0, lean = 0, pinH = false, pinF = false;
+    if (aim && aim.ok) { var sp = Math.sqrt(aim.vx * aim.vx + aim.vy * aim.vy) || 1; ax = aim.vx / sp; ay = aim.vy / sp; pw = aim.power; }
+
+    if (p.state === 'dead') {
+      if (rig.prev !== 'dead') corpse = { x: rig.cx, y: rig.cy, vx: p.vx * 0.5, vy: p.vy, r: 0, sp: (p.vx >= 0 ? -1 : 1) * (5 + Math.random() * 4), t: 0 };
+      rig.prev = 'dead';
+      if (corpse) { corpse.t += dt; corpse.vy -= C.G * dt; if (corpse.vy < -C.VTERM) corpse.vy = -C.VTERM; corpse.x += corpse.vx * dt; corpse.y += corpse.vy * dt; corpse.r += corpse.sp * dt; }
+      return;
+    }
+    if (rig.prev !== 'hold' && p.state === 'hold') rig.squash = 1;
+    if (rig.prev === 'hold' && p.state === 'air') rig.launch = 1;
+    rig.prev = p.state; corpse = null;
+
+    if (pose === 'hang') {                 // wind up: swing away from the leap and tuck the legs
+      var sw = Math.sin(t * 2.2);
+      tox = sw * 1.2 - ax * pw * 6; toy = -17 - pw * 3 - Math.max(0, ay) * pw * 2;
+      setJ(0, 0, 0, 0, -3 + sw * 2 + ax * pw * 5, -17 + pw * 6, 3 + sw * 2.6 + ax * pw * 5, -16 + pw * 6);
+      lean = sw * 0.04 + ax * pw * 0.2; pinH = true;
+    } else if (pose === 'stand') {         // crouch and throw the arms back
+      toy = 6 - pw * 4.5 + Math.sin(t * 1.9) * 0.4;
+      setJ(-7 - ax * pw * 6, -4 - pw * 2, 7 - ax * pw * 6, -4 - pw * 2, 0, 0, 0, 0);
+      lean = -ax * pw * 0.16; pinF = true;
+    } else if (pose === 'cling') {
+      setJ(-10 + ax * pw * 3, 14 + ay * pw * 3, 10 + ax * pw * 3, 14 + ay * pw * 3, -8, -15 + pw * 3, 8, -15 + pw * 3);
+      toy = -pw * 3;
+    } else if (pose === 'rise') {
+      setJ(-5 + f * 3, 16, 5 + f * 3, 16, -3 - f * 4, -16, 2 - f * 5, -15);
+      lean = S.clamp(p.vx / 1000, -0.5, 0.5);
+    } else if (pose === 'zip') {
+      var zh = sim.world.holds[p.zipTo], zx = S.holdX(zh, t) - p.x, zy = S.holdY(zh, t) - p.y, zd = Math.sqrt(zx * zx + zy * zy) || 1;
+      setJ(zx / zd * 15, zy / zd * 15 + 5, -f * 5, 1, -3 - zx / zd * 6, -15, 3 - zx / zd * 7, -14);
+      lean = S.clamp(zx / zd * 0.5, -0.5, 0.5);
+    } else if (pose === 'glide') {
+      setJ(-8, 14, 8, 14, -3 - f * 4 - p.vx * 0.02, -16, 3 - f * 4 - p.vx * 0.02, -17);
+      lean = S.clamp(p.vx / 700, -0.35, 0.35);
+    } else {                               // falling: flail
+      var fl = Math.sin(t * 18) * 3;
+      setJ(-11, 11 + fl, 11, 11 - fl, -7, -14 - fl, 7, -14 + fl);
+      lean = S.clamp(p.vx / 1400, -0.3, 0.3);
+    }
+
+    if (!rig.init) { rig.init = true; rig.ox = tox; rig.oy = toy; rig.lean = lean; for (i = 0; i < 8; i++) rig.j[i] = TJ[i]; rig.squash = rig.launch = 0; }
+    k = 1 - Math.exp(-dt * 20);
+    rig.ox += (tox - rig.ox) * k; rig.oy += (toy - rig.oy) * k;
+    rig.lean += (lean - rig.lean) * (1 - Math.exp(-dt * 12));
+    k = 1 - Math.exp(-dt * 24);
+    for (i = 0; i < 8; i++) rig.j[i] += (TJ[i] - rig.j[i]) * k;
+    if (pinH) { rig.j[0] = -3 - rig.ox; rig.j[1] = -1 - rig.oy; rig.j[2] = 3 - rig.ox; rig.j[3] = -1 - rig.oy; }     // hands stay on the hold
+    if (pinF) { rig.j[4] = -4; rig.j[5] = -C.PR - rig.oy; rig.j[6] = 4; rig.j[7] = -C.PR - rig.oy; }                  // feet stay on the ledge
+    rig.squash = Math.max(0, rig.squash - dt * 5.5); rig.launch = Math.max(0, rig.launch - dt * 6);
+    rig.wing += ((pose === 'glide' ? 1 : 0) - rig.wing) * (1 - Math.exp(-dt * 16));
+    rig.blinkT -= dt; if (rig.blinkT < -0.12) rig.blinkT = 2 + Math.random() * 3;
+    rig.pose = pose; rig.cx = p.x + rig.ox; rig.cy = p.y + rig.oy;
+
+    if (look.trail && p.state !== 'hold' && Math.random() < dt * 45) {
+      var tx = rig.cx + (Math.random() - 0.5) * 8, ty = rig.cy + (Math.random() - 0.5) * 10;
+      if (look.trail === 'sparks') add(tx, ty, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, -200, 0.5, 1.4, '#ffe08a', true);
+      else if (look.trail === 'petals') add(tx, ty, (Math.random() - 0.5) * 40, -10 - Math.random() * 20, -40, 0.9, 1.8, Math.random() < 0.5 ? '#f3b6c6' : '#ffffff');
+      else if (look.trail === 'embers') add(tx, ty, (Math.random() - 0.5) * 24, 20 + Math.random() * 40, 0, 0.6, 1.4, '#ff8a3c', true);
+      else if (look.trail === 'frost') add(tx, ty, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, -30, 0.8, 1.3, '#bfeaff', true);
+    }
+  }
   function updateScarf(dt, sim) {
     var p = sim.p, n = 9, i, a, b, dx, dy, d;
-    var pose = bodyOf(sim);
-    if (!scarf.length) for (i = 0; i < n; i++) scarf.push({ x: pose.bx, y: pose.by + 6 - i * 3 });
-    scarf[0].x = pose.bx - p.face * 2; scarf[0].y = pose.by + 6;
+    if (p.state === 'dead') return;
+    if (!scarf.length) for (i = 0; i < n; i++) scarf.push({ x: rig.cx, y: rig.cy + 6 - i * 3 });
+    scarf[0].x = rig.cx - p.face * 2; scarf[0].y = rig.cy + 6;
     for (i = 1; i < n; i++) {
       a = scarf[i - 1]; b = scarf[i];
       b.y -= 50 * dt; b.x += (-p.face * 14 + Math.sin(sim.t * 4 + i) * 10) * dt;
@@ -620,69 +701,63 @@
       if (d > 4.2) { b.x = a.x + dx / d * 4.2; b.y = a.y + dy / d * 4.2; }
     }
   }
-  function bodyOf(sim) {
-    var p = sim.p, h = p.state === 'hold' ? sim.world.holds[p.hold] : null;
-    if (h && (h.type === 'ledge' || h.type === 'camp')) return { bx: p.x, by: p.y + 6, pose: 'stand' };
-    if (h && h.type === 'plate') return { bx: p.x, by: p.y, pose: 'cling' };
-    if (h) return { bx: p.x + Math.sin(sim.t * 2.2) * 1.2, by: p.y - 17, pose: 'hang' };
-    return { bx: p.x, by: p.y, pose: p.state === 'zip' ? 'zip' : (p.gliding ? 'glide' : (p.vy > 0 ? 'rise' : 'fall')) };
-  }
   function limb(x0, y0, x1, y1, P) {
     if (P.rim) { ctx.strokeStyle = P.rim; ctx.lineWidth = 4.4; line(x0, y0, x1, y1); }
     ctx.strokeStyle = '#263349'; ctx.lineWidth = 2.8; line(x0, y0, x1, y1);
   }
+  // torso and head around the origin; f is the facing, eye: draw the eye
+  function torso(f, eye) {
+    ctx.fillStyle = '#16202f'; rrect(-5.4, -7.4, 10.8, 14.8, 3.4); ctx.fill();
+    ctx.fillStyle = '#3f9ac4'; rrect(-4.5, -6.5, 9, 13, 3); ctx.fill();
+    ctx.fillStyle = '#2f7da2'; ctx.fillRect(-4.5, -6.5, 9, 4);
+    ctx.fillStyle = '#16202f'; circle(0, 10.5, 5.6);
+    ctx.fillStyle = '#f1c9a0'; circle(0, 10.5, 4.6);
+    ctx.fillStyle = '#3f9ac4'; ctx.beginPath(); ctx.arc(0, 11, 4.8, 0.15 * Math.PI, 0.85 * Math.PI); ctx.fill();
+    if (eye) { ctx.fillStyle = '#16202f'; ctx.fillRect(f * 1.7 - 0.6, 9.6, 1.3, 1.5); }
+    ctx.fillStyle = look.scarf; ctx.fillRect(-4.6, 5, 9.2, 2.6);
+  }
   function drawPlayer(sim, st, P) {
-    var p = sim.p;
-    if (p.state === 'dead') return;
-    var b = bodyOf(sim), bx = b.bx, by = b.by, f = p.face, t = sim.t, i;
-    var crouch = (st.aim && st.aim.ok) ? st.aim.power * 3 : 0;
+    var p = sim.p, i;
     ctx.lineCap = 'round';
+    if (p.state === 'dead') {              // tumbling away
+      if (corpse && corpse.t < 1.6) {
+        ctx.save(); ctx.translate(corpse.x, corpse.y); ctx.rotate(corpse.r);
+        limb(-4, 5, -12, 12, P); limb(4, 5, 12, 10, P); limb(-2.5, -6, -8, -15, P); limb(2.5, -6, 9, -13, P);
+        torso(1, false);
+        ctx.restore();
+      }
+      return;
+    }
+    var bx = rig.cx, by = rig.cy, j = rig.j, f = p.face, t = sim.t, pose = rig.pose;
 
     if (p.state === 'zip') {
-      var h = sim.world.holds[p.zipTo];
-      ctx.strokeStyle = '#f7e3a1'; ctx.lineWidth = 1.6; line(bx, by + 8, S.holdX(h, t), h.y);
+      var zh = sim.world.holds[p.zipTo];
+      ctx.strokeStyle = '#f7e3a1'; ctx.lineWidth = 1.6; line(bx + j[0], by + j[1], S.holdX(zh, t), S.holdY(zh, t));
     }
-    if (b.pose === 'glide') {
-      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.moveTo(bx - 25, by + 15); ctx.quadraticCurveTo(bx, by + 37, bx + 25, by + 15); ctx.quadraticCurveTo(bx, by + 23, bx - 25, by + 15); ctx.fill();
-      ctx.fillStyle = '#f4ecd2'; ctx.beginPath(); ctx.moveTo(bx - 24, by + 17); ctx.quadraticCurveTo(bx, by + 38, bx + 24, by + 17); ctx.quadraticCurveTo(bx, by + 25, bx - 24, by + 17); ctx.fill();
-      ctx.strokeStyle = 'rgba(120,100,60,.7)'; ctx.lineWidth = 1; line(bx - 24, by + 17, bx - 5, by + 8); line(bx + 24, by + 17, bx + 5, by + 8); line(bx, by + 27, bx, by + 21);
+    if (rig.wing > 0.04) {                 // the seed-silk wing unfurls
+      ctx.save(); ctx.translate(bx, by + 14); ctx.rotate(-p.steer * 0.22); ctx.scale(rig.wing, 0.6 + 0.4 * rig.wing);
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.moveTo(-25, 1); ctx.quadraticCurveTo(0, 23, 25, 1); ctx.quadraticCurveTo(0, 9, -25, 1); ctx.fill();
+      ctx.fillStyle = look.wing; ctx.beginPath(); ctx.moveTo(-24, 3); ctx.quadraticCurveTo(0, 24, 24, 3); ctx.quadraticCurveTo(0, 11, -24, 3); ctx.fill();
+      ctx.strokeStyle = look.rib; ctx.lineWidth = 1; line(-24, 3, -7, 0); line(24, 3, 7, 0); line(0, 13, 0, 7); line(-12, 10, -9, 5); line(12, 10, 9, 5);
+      ctx.restore();
     }
 
-    // scarf
-    ctx.strokeStyle = '#e5484d';
+    ctx.strokeStyle = look.scarf;
     for (i = 1; i < scarf.length; i++) { ctx.lineWidth = 4 - i * 0.32; line(scarf[i - 1].x, scarf[i - 1].y, scarf[i].x, scarf[i].y); }
 
-    var sh = by + 5, hip = by - 6 + crouch * 0.5;
-    if (b.pose === 'hang') {
-      var sw = Math.sin(t * 2.2) * 2;
-      limb(bx - 3, sh, p.x - 3, p.y - 1, P); limb(bx + 3, sh, p.x + 3, p.y - 1, P);
-      limb(bx - 2.5, hip, bx - 3 + sw, hip - 11, P); limb(bx + 2.5, hip, bx + 3 + sw * 1.3, hip - 10, P);
-    } else if (b.pose === 'stand') {
-      by -= crouch; sh = by + 5; hip = by - 6;
-      limb(bx - 2.5, hip, bx - 4, p.y - C.PR, P); limb(bx + 2.5, hip, bx + 4, p.y - C.PR, P);
-      limb(bx - 4, sh, bx - 7 - crouch, by - 4 + crouch, P); limb(bx + 4, sh, bx + 7 + crouch, by - 4 + crouch, P);
-    } else if (b.pose === 'cling') {
-      limb(bx - 4, sh, bx - 10, by + 14, P); limb(bx + 4, sh, bx + 10, by + 14, P);
-      limb(bx - 2.5, hip, bx - 8, hip - 9, P); limb(bx + 2.5, hip, bx + 8, hip - 9, P);
-    } else if (b.pose === 'rise' || b.pose === 'zip') {
-      limb(bx - 4, sh, bx - 5 + f * 3, by + 16, P); limb(bx + 4, sh, bx + 5 + f * 3, by + 16, P);
-      limb(bx - 2.5, hip, bx - 3 - f * 4, hip - 10, P); limb(bx + 2.5, hip, bx + 2 - f * 5, hip - 9, P);
-    } else if (b.pose === 'glide') {
-      limb(bx - 4, sh, bx - 5, by + 9, P); limb(bx + 4, sh, bx + 5, by + 9, P);
-      limb(bx - 2.5, hip, bx - 3 - f * 3, hip - 11, P); limb(bx + 2.5, hip, bx + 3 - f * 3, hip - 11, P);
-    } else {
-      var fl = Math.sin(t * 18) * 3;
-      limb(bx - 4, sh, bx - 11, by + 11 + fl, P); limb(bx + 4, sh, bx + 11, by + 11 - fl, P);
-      limb(bx - 2.5, hip, bx - 7, hip - 8 - fl, P); limb(bx + 2.5, hip, bx + 7, hip - 8 + fl, P);
+    // stretch along the motion in the air, squash on landing; hands or feet stay put because they are the pivot
+    var py = pose === 'hang' ? -1 - rig.oy : pose === 'stand' ? -C.PR - rig.oy : 0, sy = 1, sx = 1;
+    if (pose === 'rise' || pose === 'fall' || pose === 'zip') {
+      sy = 1 + Math.min(0.2, Math.sqrt(p.vx * p.vx + p.vy * p.vy) / 3800) + rig.launch * 0.16; sx = 1 / Math.sqrt(sy);
     }
-    // torso + head
-    ctx.fillStyle = '#16202f'; rrect(bx - 5.4, by - 7.4, 10.8, 14.8, 3.4); ctx.fill();
-    ctx.fillStyle = '#3f9ac4'; rrect(bx - 4.5, by - 6.5, 9, 13, 3); ctx.fill();
-    ctx.fillStyle = '#2f7da2'; ctx.fillRect(bx - 4.5, by - 6.5, 9, 4);
-    ctx.fillStyle = '#16202f'; circle(bx, by + 10.5, 5.6);
-    ctx.fillStyle = '#f1c9a0'; circle(bx, by + 10.5, 4.6);
-    ctx.fillStyle = '#3f9ac4'; ctx.beginPath(); ctx.arc(bx, by + 11, 4.8, 0.15 * Math.PI, 0.85 * Math.PI); ctx.fill();
-    ctx.fillStyle = '#e5484d'; ctx.fillRect(bx - 4.6, by + 5, 9.2, 2.6);
+    var sq = Math.sin(rig.squash * Math.PI) * 0.9 + rig.squash * 0.1;
+    sy *= 1 - 0.22 * sq; sx *= 1 + 0.16 * sq;
+    ctx.save();
+    ctx.translate(bx, by + py); ctx.rotate(-rig.lean); ctx.scale(sx, sy); ctx.translate(0, -py);
+    limb(-2.5, -6, j[4], j[5], P); limb(2.5, -6, j[6], j[7], P);
+    limb(-4, 5, j[0], j[1], P); limb(4, 5, j[2], j[3], P);
+    torso(f, rig.blinkT > 0);
+    ctx.restore();
 
     // grip ring
     var fr = p.stamina / sim.mods.stMax;
@@ -692,6 +767,59 @@
       ctx.strokeStyle = col; ctx.lineWidth = 2.6; ctx.lineCap = 'butt';
       ctx.beginPath(); ctx.arc(bx, cy, 22, Math.PI / 2, Math.PI / 2 - TAU * Math.max(0.001, fr), true); ctx.stroke();
       ctx.lineCap = 'round';
+    }
+    if (p.hops > 0 && p.state === 'air') {       // an air hop is ready
+      ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.moveTo(bx - 6, by - 24); ctx.lineTo(bx, by - 19); ctx.lineTo(bx + 6, by - 24); ctx.stroke();
+    }
+  }
+
+  /* ---------- moving hazards ---------- */
+  var MPR = { x: 0, y: 0, on: false, dir: 0 };
+  function drawMobs(Wd, sim, now, dt) {
+    var b0 = Wd.bucketOf(cam.bottom - 40), b1 = Wd.bucketOf(cam.bottom + viewH + 40), b, i, list, seen = {}, t = sim.t;
+    for (b = b0; b <= b1; b++) {
+      list = Wd.grid.mobs[b]; if (!list) continue;
+      for (i = 0; i < list.length; i++) {
+        var m = Wd.mobs[list[i]]; if (seen[m.id]) continue; seen[m.id] = 1;
+        S.mobPos(m, t, MPR);
+        var x = MPR.x, y = MPR.y;
+        if (m.kind === 'drip') {            // molten slag from a cracked pipe
+          ctx.strokeStyle = 'rgba(255,150,60,.16)'; ctx.lineWidth = 2; ctx.setLineDash([4, 7]); line(m.x, m.y, m.x, m.y - m.fall); ctx.setLineDash([]);
+          ctx.fillStyle = '#120d0a'; rrect(m.x - 10, m.y, 20, 12, 3); ctx.fill();
+          ctx.fillStyle = '#6a4a2c'; rrect(m.x - 8.5, m.y + 1.5, 17, 9, 2.5); ctx.fill();
+          ctx.fillStyle = '#ff9a3c'; ctx.fillRect(m.x - 4, m.y - 1.5, 8, 3);
+          light('#ff8a3c', m.x, m.y, 20, 0.5);
+          if (MPR.on) {
+            light('#ffb347', x, y, 24, 0.75);
+            ctx.fillStyle = '#7a2a08'; ctx.beginPath(); ctx.moveTo(x, y + 19); ctx.quadraticCurveTo(x + 10, y + 2, x, y - 9); ctx.quadraticCurveTo(x - 10, y + 2, x, y + 19); ctx.fill();
+            ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.moveTo(x, y + 16); ctx.quadraticCurveTo(x + 8, y + 2, x, y - 7.5); ctx.quadraticCurveTo(x - 8, y + 2, x, y + 16); ctx.fill();
+            ctx.fillStyle = '#fff0a0'; circle(x, y - 1.5, 3);
+            if (dt > 0 && Math.random() < 0.4) add(x + (Math.random() - 0.5) * 6, y + 10, (Math.random() - 0.5) * 16, 30, -100, 0.4, 1.3, '#ffb24a', true);
+          }
+        } else if (m.kind === 'bird') {     // a wall-swift on its beat
+          var flap = Math.sin(now * 16 + m.id), d = MPR.dir;
+          ctx.fillStyle = '#1d222c';
+          ctx.beginPath(); ctx.moveTo(x - d * 2, y + 1); ctx.lineTo(x - d * 9, y + 3 + flap * 9); ctx.lineTo(x + d * 3, y + 2); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(x - d * 4, y); ctx.lineTo(x - d * 14, y + 1 - flap * 6); ctx.lineTo(x - d * 1, y - 2); ctx.fill();
+          oval(x, y, 9.5, 5);
+          ctx.beginPath(); ctx.moveTo(x - d * 8, y + 1); ctx.lineTo(x - d * 16, y + 4); ctx.lineTo(x - d * 15, y - 3); ctx.fill();
+          ctx.fillStyle = '#e9e4d4'; oval(x + d * 2, y - 1.6, 5, 2.4);
+          ctx.fillStyle = '#e0962f'; ctx.beginPath(); ctx.moveTo(x + d * 9, y + 1.6); ctx.lineTo(x + d * 14, y); ctx.lineTo(x + d * 9, y - 1.4); ctx.fill();
+          ctx.fillStyle = '#ffffff'; circle(x + d * 5.5, y + 1.6, 1.5); ctx.fillStyle = '#10131a'; circle(x + d * 6, y + 1.6, 0.8);
+        } else {                            // a patrol drone on its rail
+          ctx.strokeStyle = 'rgba(127,212,255,.22)'; ctx.lineWidth = 2; ctx.setLineDash([3, 6]); line(m.x, m.y - m.amp, m.x, m.y + m.amp); ctx.setLineDash([]);
+          light('#7fd4ff', x, y, 26, 0.55 + 0.2 * Math.sin(now * 9));
+          ctx.fillStyle = '#0a0c16'; circle(x, y, 13.5); ctx.fillRect(x - 15, y + 9, 30, 3.4);
+          ctx.fillStyle = '#39436a'; circle(x, y, 12);
+          ctx.fillStyle = '#8e98c4'; ctx.fillRect(x - 13 + Math.sin(now * 40) * 2, y + 9.6, 26, 2);
+          ctx.fillStyle = '#c9a54a'; ctx.fillRect(x - 12, y - 1.5, 24, 3);
+          var ex = S.clamp((sim.p.x - x) / 40, -1, 1) * 3, ey = S.clamp((sim.p.y - y) / 40, -1, 1) * 3;
+          ctx.fillStyle = '#0a0c16'; circle(x + ex * 0.6, y + ey * 0.6, 6);
+          ctx.fillStyle = '#9fe2ff'; circle(x + ex, y + ey, 3.6); ctx.fillStyle = '#ffffff'; circle(x + ex - 1, y + ey + 1, 1.2);
+          if (dt > 0 && Math.random() < 0.06) add(x + (Math.random() - 0.5) * 20, y + (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60, 0, 0.25, 1.2, '#bff1ff', true);
+        }
+      }
     }
   }
 
@@ -829,12 +957,14 @@
     drawHolds(Wd, sim, st.now);
     drawSprings(Wd, st.now);
     drawVents(Wd, sim, st.dt);
+    drawMobs(Wd, sim, st.now, st.dt);
     drawShards(Wd, sim, st.now);
     if (sim.rise.on) drawSlag(sim.rise.level, st.now, st.dt);
     if (st.ghost) drawGhost(st.ghost, st.now);
     drawPlayer(sim, st, PAL[S.districtAt(Wd, sim.p.y)]);
     drawParts();
-    if (set && set.type === 'dark' && sa > 0.01) drawDark(Wd, sim, sa);
+    if (st.darkAll) drawDark(Wd, sim, 1);
+    else if (set && set.type === 'dark' && sa > 0.01) drawDark(Wd, sim, sa);
     if (st.aim && st.aim.ok) drawAim(sim, st.aim, PAL[S.districtAt(Wd, sim.p.y)], st.now);
     screenT();
     drawClouds(Wd, st.now);
@@ -875,6 +1005,7 @@
     flash: function () { flashA = 1; },
     setWorld: function () { parts.length = 0; pops = {}; },
     pop: function (id, now) { pops[id] = now; },
+    setLook: function (l) { look.scarf = l.scarf || '#e5484d'; look.wing = l.wing || '#f4ecd2'; look.rib = l.rib || 'rgba(120,100,60,.7)'; look.trail = l.trail || null; },
     scale: function () { return sc; },      // base scale (zoom 1): drag distances are measured in this
     cam: cam
   };

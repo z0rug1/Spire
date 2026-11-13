@@ -3,7 +3,7 @@
   'use strict';
   var S = window.Spire, C = S.C, R = S.Render, A = S.Audio, ST = S.Story;
   var $ = function (id) { return document.getElementById(id); };
-  var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', KEY_E = 'spire.endless.v1', WORLD_V = 3;
+  var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', KEY_E = 'spire.endless.v1', WORLD_V = 4;
   var STEER_PX = 70;          // finger travel for full glide steering
 
   var mainWorld = S.generate(C.SEED, S.MAIN_PLAN), world = mainWorld;
@@ -25,13 +25,18 @@
   function freshSave(set) {
     return { v: 1, wv: WORLD_V, camp: 0, cp: null, maxCamp: 0, visited: { 0: 1 }, seen: {}, chalk: 0, got: 0, upg: {}, flags: {}, taken: {},
              marks: [], falls: 0, time: 0, hints: {}, ending: null, started: false,
-             set: set || { sling: true, aim2: 1, sound: true, fs: true } };
+             cos: { own: { red: 1, silk: 1, none: 1 }, scarf: 'red', wing: 'silk', trail: 'none' }, ch: null, rec: {},
+             set: set || { sling: true, aim2: 1, sound: true, music: true, fs: true } };
   }
   function load() {
     try {
       var s = JSON.parse(localStorage.getItem(KEY));
       if (s && s.v === 1 && s.set) {
         if (!s.set.aim2) { s.set.sling = true; s.set.aim2 = 1; }           // pull-back aiming became the default
+        if (s.set.music == null) s.set.music = true;
+        if (!s.cos) s.cos = { own: { red: 1, silk: 1, none: 1 }, scarf: 'red', wing: 'silk', trail: 'none' };
+        if (!s.rec) s.rec = {};
+        if (s.wv !== WORLD_V) s.ch = null;                                  // a challenge in progress pointed into the old layout
         if (s.wv !== WORLD_V) { s.taken = {}; s.marks = []; s.cp = null; s.wv = WORLD_V; }   // the tower layout changed
         return s;
       }
@@ -55,13 +60,19 @@
   function persistEndless() { try { localStorage.setItem(KEY_E, JSON.stringify(endless)); } catch (e) {} }
 
   function mods() {
-    if (run) return { stMax: C.ST_MAX, vmax: C.VMAX, drain: 1, pitonMax: 2 };    // daily runs are at base stats for everyone
+    if (run && run.kind === 'daily') return { stMax: C.ST_MAX, vmax: C.VMAX, drain: 1, pitonMax: 2 };    // base stats for everyone
+    if (run && run.kind === 'endless') {
+      var k = run.perks;
+      return { stMax: C.ST_MAX + 30 * (k.lungs || 0), vmax: C.VMAX * (1 + 0.07 * (k.legs || 0)), drain: Math.pow(0.75, k.grip || 0), pitonMax: 2,
+               hops: k.hop || 0, grapR: C.GRAPPLE_R * (1 + 0.35 * (k.line || 0)), riseK: Math.pow(0.7, k.cool || 0), fallK: 1 + 0.5 * (k.feather || 0),
+               glideK: Math.pow(0.5, k.kite || 0), insulated: !!k.rubber, crumbleK: Math.pow(1.6, k.calm || 0) };
+    }
     var u = save.upg, f = save.flags;
     return {
       stMax: C.ST_MAX + 20 * (u.lungs || 0) + (f.kept ? 10 : 0),
       vmax: C.VMAX * (1 + 0.05 * (u.legs || 0)),
-      drain: 1 - 0.15 * (u.hands || 0),
-      pitonMax: 2 + (u.sling || 0) + (f.ledger ? 1 : 0)
+      drain: (1 - 0.15 * (u.hands || 0)) * (run && run.m.thin ? 1.33 : 1),
+      pitonMax: run && run.m.nopiton ? 0 : 2 + (u.sling || 0) + (f.ledger ? 1 : 0)
     };
   }
   function tools() { return run ? { grapple: true, glider: true, gloves: true } : S.toolsFor(save.maxCamp); }
@@ -70,10 +81,16 @@
     for (k in m) sim.mods[k] = m[k];
     sim.tools = tools();
   }
+  function lookOf(kind, id) { return ST.looks[kind].filter(function (l) { return l.id === id; })[0] || ST.looks[kind][0]; }
+  function applyLook() {
+    var c = save.cos, w = lookOf('wing', c.wing);
+    R.setLook({ scarf: lookOf('scarf', c.scarf).col, wing: w.col, rib: w.rib, trail: c.trail === 'none' ? null : c.trail });
+  }
   function startSim() {
-    var cp = world.camps[run ? 0 : save.camp].hold, saved = run ? null : world.holds[save.cp];
+    var cp = world.camps[run ? 0 : save.camp].hold, saved = world.holds[run ? run.cp : save.cp];
     if (saved && saved.type === 'camp') cp = saved.id;          // a bivouac or camp reached since
     sim = S.createSim(world, { checkpoint: cp, taken: run ? {} : save.taken, mods: mods(), tools: tools() });
+    applyLook();
     R.snap(sim, mode === 'title' ? 'title' : 'play');
     aim = null; acc = 0; curSet = null; ptr.down = false; ptr.dead = false;
   }
@@ -248,6 +265,16 @@
                    : '<button class="buy" data-buy="' + u.id + '"' + (save.chalk < cost ? ' disabled' : '') + '>&#9670; ' + cost + '</button>') + '</div>';
     });
     html += '<div style="height:14px"></div><button class="btn primary" data-act="resume">Climb on</button>';
+    html += '<h3>Tailor</h3>';
+    [['scarf', 'Scarf'], ['wing', 'Glider'], ['trail', 'Trail']].forEach(function (kd) {
+      html += '<div class="desc" style="margin:6px 0 5px">' + kd[1] + '</div><div class="swatches">';
+      ST.looks[kd[0]].forEach(function (l) {
+        var own = save.cos.own[l.id], on = save.cos[kd[0]] === l.id;
+        html += '<button class="sw' + (on ? ' on' : '') + '" data-look="' + kd[0] + ':' + l.id + '"' + (!own && save.chalk < l.cost ? ' disabled' : '') + '>' +
+          '<i style="background:' + l.col + '"></i>' + l.name + (own ? '' : ' <b>&#9670; ' + l.cost + '</b>') + '</button>';
+      });
+      html += '</div>';
+    });
     var others = Object.keys(save.visited).map(Number).filter(function (k) { return k !== idx; }).sort(function (a, b) { return a - b; });
     if (others.length) {
       html += '<h3>Lift</h3><div class="lift">';
@@ -266,9 +293,17 @@
   function renderPause() {
     var settings = '<button class="btn" data-set="sling">' + aimLabel() + '</button>' +
       '<button class="btn" data-set="sound">' + soundLabel() + '</button>' +
+      '<button class="btn" data-set="music">' + musicLabel() + '</button>' +
       '<button class="btn" data-set="fs">' + fsLabel() + '</button>';
     if (run) {
-      panel('<h2>Paused</h2><div class="sub">' + (run.kind === 'daily' ? 'Daily tower &middot; ' + dateLabel(daily.date) : 'Endless climb &middot; ' + metres(run.maxY) + ' m') + '</div>' +
+      var sub = run.kind === 'daily' ? 'Daily tower &middot; ' + dateLabel(daily.date)
+              : run.kind === 'endless' ? 'Endless climb &middot; ' + metres(run.maxY) + ' m'
+              : 'Challenge &middot; ' + chNames(run.m) + ' &middot; ' + fmtLong(run.time), perkList = '';
+      if (run.kind === 'endless') {
+        ST.perks.forEach(function (pk) { if (run.perks[pk.id] && pk.id !== 'rope') perkList += pk.name + (run.perks[pk.id] > 1 ? ' &times;' + run.perks[pk.id] : '') + ', '; });
+        if (perkList) perkList = '<p class="note">Perks: ' + perkList.slice(0, -2) + '</p>';
+      }
+      panel('<h2>Paused</h2><div class="sub">' + sub + '</div>' + perkList +
         '<button class="btn primary" data-act="resume">Resume</button>' + settings +
         '<button class="btn" data-act="run-again">Restart the run</button>' +
         '<button class="btn" data-act="run-quit">Quit to title</button>');
@@ -281,6 +316,7 @@
   }
   function aimLabel() { return 'Aim: ' + (save.set.sling ? 'pull back, like a cue' : 'drag forward'); }
   function soundLabel() { return 'Sound: ' + (save.set.sound ? 'on' : 'off'); }
+  function musicLabel() { return 'Music: ' + (save.set.music ? 'on' : 'off'); }
   function fsLabel() { return 'Fullscreen: ' + (save.set.fs ? 'on' : 'off'); }
   function panel(html) { $('panel-card').innerHTML = html; $('panel-card').scrollTop = 0; show($('panel')); }
   function closePanel() { hide($('panel')); }
@@ -288,6 +324,7 @@
   function toggleSetting(k) {
     save.set[k] = !save.set[k];
     if (k === 'sound') A.setMuted(!save.set.sound);
+    if (k === 'music') A.setMusic(save.set.music);
     if (k === 'fs') {
       if (save.set.fs) goFullscreen();
       else if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
@@ -298,6 +335,16 @@
   $('panel').addEventListener('click', function (e) {
     var t = e.target.closest('button'); if (!t) return;
     var act = t.getAttribute('data-act'), buy = t.getAttribute('data-buy'), lift = t.getAttribute('data-lift'), set = t.getAttribute('data-set');
+    var lk = t.getAttribute('data-look'), perk = t.getAttribute('data-perk'), chm = t.getAttribute('data-chm');
+    if (lk) {                   // the tailor: buy if needed, then wear
+      var kd = lk.split(':'), item = lookOf(kd[0], kd[1]);
+      if (!save.cos.own[item.id]) { if (save.chalk < item.cost) return; save.chalk -= item.cost; save.cos.own[item.id] = 1; A.sfx('buy'); } else A.sfx('ui');
+      save.cos[kd[0]] = item.id; applyLook(); persist();
+      var sc0 = $('panel-card').scrollTop; openCamp(); $('panel-card').scrollTop = sc0;
+      return;
+    }
+    if (perk) { takePerk(perk); return; }
+    if (chm) { chSel[chm] = !chSel[chm]; A.sfx('ui'); openChallenges(); return; }
     if (set) { toggleSetting(set); renderPause(); return; }
     if (buy) {
       var u = ST.upgrades.filter(function (x) { return x.id === buy; })[0], lv = save.upg[buy] || 0, cost = u.costs[lv];
@@ -316,7 +363,11 @@
     if (act === 'resume' || act === 'explore') { closePanel(); resume(); }
     else if (act === 'tocamp') { save.cp = world.camps[save.camp].hold; sim.checkpoint = save.cp; S.respawn(sim); R.snap(sim, 'play'); curSet = null; closePanel(); resume(); }
     else if (act === 'title') { persist(); closePanel(); showTitle(); }
-    else if (act === 'run-again') { closePanel(); if (run.kind === 'daily') startDaily(); else startEndless(); }
+    else if (act === 'run-again') { closePanel(); if (run.kind === 'daily') startDaily(); else if (run.kind === 'endless') startEndless(); else startChallenge(run.m, false); }
+    else if (act === 'ch-start') { closePanel(); startChallenge(chSel, false); }
+    else if (act === 'ch-resume') { closePanel(); startChallenge(save.ch.m, true); }
+    else if (act === 'ch-drop') { save.ch = null; persist(); openChallenges(); }
+    else if (act === 'ch-back') { closePanel(); mode = 'title'; }
     else if (act === 'run-quit') { closePanel(); leaveRun(); }
   });
 
@@ -327,7 +378,7 @@
     R.setWorld();
     run = { kind: 'daily', started: false, t0: 0, time: 0, rec: [], falls: 0, done: false, maxY: 0 };
     hide($('title')); show($('hud')); hide($('chalk')); show($('clock'));
-    A.init(); A.setMuted(!save.set.sound); goFullscreen();
+    A.init(); A.setMuted(!save.set.sound); A.setMusic(save.set.music); goFullscreen();
     mode = 'play';
     startSim(); hudCache = {};
     banner('Daily tower', dateLabel(daily.date)); A.sfx('banner');
@@ -339,13 +390,13 @@
     endless = loadEndless();
     world = S.endlessWorld(4);
     R.setWorld();
-    run = { kind: 'endless', started: false, t0: 0, time: 0, rec: [], falls: 0, done: false, lives: 3, maxY: 0, camps: 0 };
+    run = { kind: 'endless', started: false, t0: 0, time: 0, rec: [], falls: 0, done: false, lives: 3, maxY: 0, camps: 0, perks: {} };
     hide($('title')); show($('hud')); hide($('chalk')); show($('clock'));
-    A.init(); A.setMuted(!save.set.sound); goFullscreen();
+    A.init(); A.setMuted(!save.set.sound); A.setMusic(save.set.music); goFullscreen();
     mode = 'play';
     startSim(); hudCache = {};
     banner('Endless climb', endless.best ? 'Best ' + endless.best.toLocaleString('en-US') + ' m' : 'No summit'); A.sfx('banner');
-    toast('Three ropes. A fall costs one, and every second camp gives one back.', 6);
+    toast('Three ropes. A fall costs one. Every second camp gives one back, and a perk.', 6);
     resume();
   }
   function finishEndless() {
@@ -366,6 +417,88 @@
       '<button class="btn primary" data-act="run-again">Climb again</button>' +
       '<button class="btn" data-act="run-quit">Back to title</button>');
   }
+  // Every second camp of the endless climb offers three perks.
+  function offerPerk(camp) {
+    var pool = ST.perks.filter(function (pk) { return (run.perks[pk.id] || 0) < pk.max && !(pk.id === 'rope' && run.lives >= 5); }), pick = [], html, i;
+    while (pick.length < 3 && pool.length) pick.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    if (!pick.length) return;
+    mode = 'perk'; aim = null; ptr.down = false;
+    html = '<h2>Camp ' + camp + '</h2><div class="sub">Take one with you</div>';
+    for (i = 0; i < pick.length; i++)
+      html += '<button class="btn pick" data-perk="' + pick[i].id + '">' + pick[i].name + '<small>' + pick[i].desc + '</small></button>';
+    panel(html);
+  }
+  function takePerk(id) {
+    run.perks[id] = (run.perks[id] || 0) + 1;
+    if (id === 'rope') run.lives = Math.min(5, run.lives + 1);
+    applyMods(); sim.p.stamina = sim.mods.stMax; sim.p.hops = sim.mods.hops || 0;
+    A.sfx('perk'); closePanel(); resume();
+  }
+
+  /* ---------- challenge climbs ----------
+     The story tower again with modifiers, a clock and a split at every district gate. Open once the
+     story has an ending. Progress is kept at each camp and bivouac in save.ch. */
+  var chSel = {};
+  function chKey(m) { var k = ST.challenges.filter(function (c) { return m[c.id]; }).map(function (c) { return c.id; }); return k.length ? k.join('+') : 'plain'; }
+  function chNames(m) { var k = ST.challenges.filter(function (c) { return m[c.id]; }).map(function (c) { return c.name; }); return k.length ? k.join(', ') : 'No modifiers'; }
+  function fmtLong(s) { s = Math.floor(s); var h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return (h ? h + ':' + ('0' + m).slice(-2) : m) + ':' + ('0' + (s % 60)).slice(-2); }
+  function openChallenges() {
+    mode = 'menu';
+    var html = '<h2>Challenges</h2><div class="sub">The story tower again, against the clock</div>', rec = save.rec[chKey(chSel)];
+    if (save.ch) {
+      html += '<p class="note">In progress: ' + chNames(save.ch.m) + ' &middot; ' + metres(world.holds[save.ch.cp] ? world.holds[save.ch.cp].y : 0) + ' m &middot; ' + fmtLong(save.ch.time) + '</p>' +
+        '<button class="btn primary" data-act="ch-resume">Resume it</button><button class="btn danger" data-act="ch-drop">Abandon it</button>';
+    }
+    html += '<h3>Modifiers</h3>';
+    ST.challenges.forEach(function (c) {
+      html += '<button class="btn pick tog' + (chSel[c.id] ? ' on' : '') + '" data-chm="' + c.id + '">' + (chSel[c.id] ? '&#9679; ' : '&#9675; ') + c.name + '<small>' + c.desc + '</small></button>';
+    });
+    html += '<p class="note" style="margin-top:12px">' + (rec ? 'Your best with these: ' + fmtLong(rec.time) + ', ' + rec.falls + ' falls.' : 'No finished climb with these yet.') +
+      ' All tools from the start, your upgrades, and chalk still counts.</p>' +
+      '<button class="btn' + (save.ch ? '' : ' primary') + '" data-act="ch-start">Start a new climb</button><button class="btn" data-act="ch-back">Back</button>';
+    panel(html);
+  }
+  function startChallenge(m, resumeIt) {
+    var ch = resumeIt ? save.ch : null, mm = {};
+    ST.challenges.forEach(function (c) { if (m[c.id]) mm[c.id] = 1; });
+    world = mainWorld; R.setWorld();
+    run = { kind: 'challenge', m: mm, started: true, t0: 0, time: ch ? ch.time : 0, rec: [], falls: ch ? ch.falls : 0, done: false, maxY: 0,
+            cp: ch ? ch.cp : null, splits: ch ? ch.splits.slice() : [], camp: ch ? ch.camp : 0 };
+    if (!resumeIt) { save.ch = { m: mm, cp: world.camps[0].hold, time: 0, falls: 0, splits: [], camp: 0 }; persist(); }
+    hide($('title')); show($('hud')); show($('chalk')); show($('clock'));
+    A.init(); A.setMuted(!save.set.sound); A.setMusic(save.set.music); goFullscreen();
+    mode = 'play';
+    startSim(); hudCache = {};
+    banner(chNames(mm), 'Challenge climb'); A.sfx('banner');
+    resume();
+  }
+  function challengeCheckpoint(holdId, campIdx) {
+    run.cp = holdId;
+    if (campIdx != null && campIdx > run.camp) {
+      run.camp = campIdx;
+      if (campIdx % 4 === 0) {                 // a district gate: take a split
+        var best = save.rec[chKey(run.m)], d = campIdx / 4 - 1, diff = best && best.splits[d] != null ? run.time - best.splits[d] : null;
+        run.splits[d] = run.time;
+        toast(S.DISTRICTS[d].name + ' in ' + fmtLong(run.time) + (diff == null ? '' : ' (' + (diff <= 0 ? '\u2212' : '+') + fmtLong(Math.abs(diff)) + ')'), 4);
+      }
+    }
+    save.ch = { m: run.m, cp: holdId, time: run.time, falls: run.falls, splits: run.splits.slice(), camp: run.camp };
+    persist();
+  }
+  function finishChallenge() {
+    var key = chKey(run.m), prev = save.rec[key], nb = !prev || run.time < prev.time, html, i;
+    run.done = true;
+    if (nb) save.rec[key] = { time: run.time, falls: run.falls, splits: run.splits.slice() };
+    save.ch = null; persist();
+    A.sfx('finish'); mode = 'end'; aim = null;
+    html = '<h2>Summit</h2><div class="sub">' + chNames(run.m) + '</div><div class="stats">' +
+      '<div><b>' + fmtLong(run.time) + '</b><span>Time</span></div><div><b>' + run.falls + '</b><span>Falls</span></div></div>';
+    for (i = 0; i < 4; i++) html += '<div class="row"><div class="grow"><div class="name">' + S.DISTRICTS[i].name + '</div></div><b>' + fmtLong(run.splits[i] || run.time) + '</b></div>';
+    html += '<p style="margin-top:12px">' + (nb ? (prev ? 'A new best, ' + fmtLong(prev.time - run.time) + ' faster.' : 'Your first finish with these modifiers.') : 'Your best is still ' + fmtLong(prev.time) + '.') + '</p>' +
+      '<button class="btn primary" data-act="run-quit">Back to title</button>';
+    panel(html);
+  }
+
   function leaveRun() {
     run = null; world = mainWorld; R.setWorld();
     show($('chalk')); hide($('clock'));
@@ -410,11 +543,14 @@
     $('endless-sub').textContent = endless.best ? 'Best ' + endless.best.toLocaleString('en-US') + ' m' : 'No summit';
     $('tag').textContent = 'One tower. ' + fill('{km}') + ' kilometres. One thumb.';
     $('set-aim').textContent = aimLabel(); $('set-sound').textContent = soundLabel(); $('set-fs').textContent = fsLabel();
+    $('set-music').textContent = musicLabel();
+    $('btn-chal').classList.toggle('hidden', !save.ending);
+    $('chal-sub').textContent = save.ch ? 'In progress: ' + fmtLong(save.ch.time) : 'Modifiers, a clock and splits';
     show($('title'));
   }
   function enterGame() {
     hide($('title')); show($('hud'));
-    A.init(); A.setMuted(!save.set.sound); goFullscreen();
+    A.init(); A.setMuted(!save.set.sound); A.setMusic(save.set.music); goFullscreen();
     save.started = true;
     mode = 'play';
     startSim(); hudCache = {};
@@ -433,6 +569,8 @@
   });
   $('btn-daily').addEventListener('click', startDaily);
   $('btn-endless').addEventListener('click', startEndless);
+  $('btn-chal').addEventListener('click', function () { A.init(); A.sfx('ui'); chSel = {}; openChallenges(); });
+  $('set-music').addEventListener('click', function () { A.init(); toggleSetting('music'); $('set-music').textContent = musicLabel(); });
   $('set-aim').addEventListener('click', function () { toggleSetting('sling'); $('set-aim').textContent = aimLabel(); });
   $('set-sound').addEventListener('click', function () { A.init(); toggleSetting('sound'); $('set-sound').textContent = soundLabel(); });
   $('set-fs').addEventListener('click', function () { toggleSetting('fs'); $('set-fs').textContent = fsLabel(); });
@@ -443,10 +581,12 @@
     if (mode === 'title') return;
     var p = sim.p;
     setText('alt-m', metres(p.y).toLocaleString('en-US'));
-    setText('alt-d', run ? (run.kind === 'daily' ? 'Daily tower' : 'Endless climb') : S.DISTRICTS[S.districtAt(world, p.y)].name);
-    if (!run) setText('chalk-n', save.chalk);
+    setText('alt-d', run && run.kind === 'daily' ? 'Daily tower' : run && run.kind === 'endless' ? 'Endless climb' : S.DISTRICTS[S.districtAt(world, p.y)].name);
+    if (!run || run.kind === 'challenge') setText('chalk-n', save.chalk);
+    if (!run) { /* no clock in the story */ }
+    else if (run.kind === 'challenge') setText('clock-n', fmtLong(run.time));
     else if (run.kind === 'daily') setText('clock-n', fmtClock(run.done ? run.time : run.started ? sim.t - run.t0 : 0));
-    else setText('clock-n', ['', '\u25C6', '\u25C6 \u25C6', '\u25C6 \u25C6 \u25C6'][Math.max(0, run.lives)] || '\u2014');
+    else setText('clock-n', run.lives > 0 ? new Array(run.lives + 1).join('\u25C6 ').trim() : '\u2014');
     setText('piton-n', sim.pitons);
     var atCamp = !run && p.state === 'hold' && world.holds[p.hold].camp != null && mode === 'play';
     if (hudCache.camp !== atCamp) { hudCache.camp = atCamp; $('btn-camp').classList.toggle('hidden', !atCamp); }
@@ -488,13 +628,20 @@
               if (e.a % 2 === 0 && run.lives < 3) { run.lives++; toast('Camp ' + e.a + '. A rope back.', 2.5); }
               else toast('Camp ' + e.a + '.', 2);
               if (e.a >= world.camps.length - 3) world.grow(3);      // keep building the wall ahead of the climber
+              if (e.a % 2 === 0) offerPerk(e.a);
             }
+          }
+          else if (run.kind === 'challenge') {
+            if (p.lastHold !== world.camps[e.a].hold) { A.sfx('camp'); if (e.a % 4) toast(ST.camps[e.a].name + '. ' + fmtLong(run.time), 2.5); }
+            challengeCheckpoint(world.camps[e.a].hold, e.a);
+            if (e.a === world.camps.length - 1) finishChallenge();
           }
           else if (e.a === world.camps.length - 1) finishDaily();
           else if (p.lastHold !== world.camps[e.a].hold) { A.sfx('camp'); toast('Checkpoint ' + e.a + ' of ' + (world.camps.length - 1) + '.', 2); }
           break;
         case 'biv':
-          if (run || p.lastHold === e.a) break;
+          if (p.lastHold === e.a) break;
+          if (run) { if (run.kind === 'challenge') { challengeCheckpoint(e.a, null); A.sfx('camp'); toast('Bivouac. ' + fmtLong(run.time), 2); } break; }
           save.cp = e.a; persist(); A.sfx('camp');
           if (!hint('biv', true) && now > toastT) toast('Bivouac. Climb saved.', 2);
           break;
@@ -502,8 +649,9 @@
         case 'tube': A.sfx('tube'); R.emit('puff', p.x, p.y, 8, 0); R.shake(3); break;
         case 'phaseout': A.sfx('phaseout'); break;
         case 'shard':
-          if (run) break;
-          save.chalk += e.a; save.got += e.a; dirty = true; A.sfx('shard');
+          if (run && run.kind !== 'challenge') break;
+          save.chalk += e.a; if (!run) save.got += e.a;
+          dirty = true; A.sfx('shard');
           R.emit('pickup', world.shards[e.b].x, world.shards[e.b].y, 8); hint('shard');
           break;
         case 'fall':
@@ -526,6 +674,12 @@
         case 'crumble': A.sfx('crumble'); R.emit('debris', world.holds[e.a].x, world.holds[e.a].y, 9); R.shake(3); break;
         case 'slip': A.sfx('slip'); R.shake(2); toast('Your grip gave out.', 2); break;
         case 'knock': A.sfx('knock'); R.shake(6); vibrate(20); break;
+        case 'mob':
+          if (e.a === 'drip') { A.sfx('sizzle'); R.emit('spark', p.x, p.y, 8); }
+          else if (e.a === 'bird') { A.sfx('peck'); R.emit('dust', p.x, p.y, 8); }
+          else { A.sfx('shock'); R.emit('spark', p.x, p.y, 12); }
+          break;
+        case 'hop': A.sfx('hop'); R.emit('chalk', p.x, p.y - 8, 6); break;
         case 'shock': A.sfx('shock'); R.emit('spark', p.x, p.y, 14); R.shake(7); vibrate(30); break;
         case 'zip': A.sfx('zip'); break;
         case 'nograpple': A.sfx('nograpple'); break;
@@ -547,6 +701,8 @@
       var k = h.type === 'plate' ? (h.elec ? 'eplate' : 'plate') : h.type;
       if (ST.hints[k] && !save.hints[k] && k !== 'grip' && k !== 'camp') { if (hint(k)) return; }
     }
+    list = world.grid.mobs[b];
+    if (list) for (i = 0; i < list.length; i++) { var mk = world.mobs[list[i]].kind; if (!save.hints[mk] && hint(mk)) return; }
     if (world.grid.springs[b] && !save.hints.spring && hint('spring')) return;
     if (world.grid.tubes[b] && !save.hints.tube && hint('tube')) return;
     if (world.grid.vents[b] && !save.hints.vent && hint('vent')) return;
@@ -591,7 +747,10 @@
     var p = sim.p, tap = !ptr.noTap && now - ptr.t0 < 0.28 && ptr.moved < 12;
     if (!dead && !cancelled) {
       if (p.state === 'hold' && aim && aim.ok) S.leap(sim, aim.vx, aim.vy);
-      else if (tap && sim.tools.grapple) { var w = R.toWorld(e.clientX, e.clientY); S.grapple(sim, w.x, w.y); }
+      else if (tap) {
+        var w = R.toWorld(e.clientX, e.clientY), hop = p.state === 'air' && p.hops > 0;
+        if (!sim.tools.grapple || !S.grapple(sim, w.x, w.y, hop)) { if (hop) S.airHop(sim); }
+      }
     }
     aim = null; p.wantGlide = false; p.steer = 0;
   }
@@ -657,6 +816,7 @@
           while (run.rec.length / 2 <= need && run.rec.length < 12000) run.rec.push(Math.round(p.x), Math.round(p.y));
         }
       } else save.time += dt;
+      if (run && run.kind === 'challenge' && !run.done) run.time += dt;
       if (p.state === 'dead' && now >= respawnAt) { S.respawn(sim); R.snap(sim); fade(0); curSet = null; }
       if (mode === 'play') { checkHints(); checkSet(); }
       if (dirty && now - saveT > 4) persist();
@@ -668,12 +828,14 @@
     var gliding = mode === 'play' && ptr.down && !ptr.dead && p.state === 'air' && p.gliding;
     R.frame({ world: world, sim: sim, now: t, dt: mode === 'play' ? dt : 0, aim: mode === 'play' ? aim : null,
               marks: run ? null : save.marks, playing: mode === 'play',
-              npcs: run ? null : function (i) { return ST.camps[i] && ST.camps[i].npcs; },
+              darkAll: !!(run && run.kind === 'challenge' && run.m.dark),
+              npcs: run && run.kind !== 'challenge' ? null : function (i) { return ST.camps[i] && ST.camps[i].npcs; },
               speaker: mode === 'talk' ? dlg.who : null,
               ghost: mode === 'play' ? ghostAt() : null,
               stick: gliding ? { sx: ptr.sx, sy: ptr.sy, x: ptr.x, max: STEER_PX } : null });
     hud();
     A.ambience(S.districtAt(world, p.y), S.clamp(p.y / world.top, 0, 1), mode !== 'title');
+    A.music(S.districtAt(world, p.y), mode === 'title' ? 0 : (curSet || sim.rise.on) ? 2 : 1);
   }
 
   /* ---------- boot ---------- */

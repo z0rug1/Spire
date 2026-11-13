@@ -117,3 +117,16 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #rotate p { font-family: var(--tale); font-size: 19px; }
 @media (orientation: landscape) and (max-height: 480px) and (pointer: coarse) { #rotate { display: flex; } }
 @media (prefers-reduced-motion: reduce) { #toast, #fade { transition: none; } #banner.show { animation-duration: 3.4s; letter-spacing: .22em; } }
+
+/* ---------- tailor, perks, challenges ---------- */
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.sw { min-height: 40px; padding: 0 11px 0 8px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .06); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
+.sw i { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .35); display: block; }
+.sw.on { border-color: var(--gold); background: rgba(242, 196, 107, .16); }
+.sw:disabled { opacity: .45; }
+.sw b { color: var(--gold); font-weight: 700; }
+.btn.pick { text-align: left; padding: 12px 14px; }
+.btn.pick small { font-weight: 500; opacity: .75; font-size: 13px; }
+.btn.tog.on { border-color: var(--gold); background: rgba(242, 196, 107, .16); }
+.note { font-family: var(--ui) !important; font-size: 13px !important; color: var(--dim); }
+.title-box #btn-chal { margin-top: 10px; padding: 9px 8px; font-size: 15px; }
