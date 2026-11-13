@@ -93,6 +93,7 @@
     applyLook();
     R.snap(sim, mode === 'title' ? 'title' : 'play');
     aim = null; acc = 0; curSet = null; ptr.down = false; ptr.dead = false;
+    fade(0);                    // in case the last climb ended mid-fall
   }
 
   /* ---------- small UI helpers ---------- */

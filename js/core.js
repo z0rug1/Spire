@@ -50,7 +50,7 @@
   S.DAILY_PLAN = [{ d: 0, n: 7 }, { d: 1, n: 8, intro: true }, { d: 2, n: 8, intro: true }, { d: 3, n: 8, intro: true }];
   // Daily towers are seeded by the local date. DAILY_SALT lists the dates whose first seed
   // produced a gap the test climber could not cross (see tests/verify.js --daily).
-  S.DAILY_SALT = {};
+  S.DAILY_SALT = { 20261223: 1, 20270210: 1, 20270824: 1 };
   S.dateKey = function (d) { d = d || new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
   S.dailySeed = function (key) { return (Math.imul(key, 2654435761) + (S.DAILY_SALT[key] || 0) * 7919) >>> 0; };
 
@@ -183,7 +183,7 @@
         var x = cur.type === 'camp' ? R(120, 240) : R(34, 326);
         if (cur.type !== 'camp' && Math.abs(x - c) < (i < 70 && minDx ? minDx : 36)) continue;
         h = mk(type, x, t0 + dy);
-        if (i < 90 && mobNear(cx(h), hy(h))) continue;
+        if (i < 90 && mobNear(cx(h), hy(h), h.hw)) continue;
         if (reach(cur, h, mm)) return h;
       }
       return mk(type === 'moving' || type === 'lift' ? 'grip' : type, clamp(c + (c < 180 ? 64 : -64), 40, 320), t0 + 56);
@@ -199,23 +199,27 @@
       return false;
     }
     // Would a hold at (x,y) sit in the path of a recently placed moving hazard?
-    function mobHits(m, x, y) {
-      if (m.kind === 'bird') return Math.abs(m.y - y) < 36;
-      if (Math.abs(m.x - x) > 34) return false;
+    // hw: half-width of a ledge, where the climber can stand anywhere along it
+    function mobHits(m, x, y, hw) {
+      if (m.kind === 'bird') return Math.abs(m.y - y) < (hw ? 52 : 36);
+      if (Math.abs(m.x - x) > 34 + (hw || 0)) return false;
       return m.kind === 'drip' ? (y < m.y + 14 && y > m.y - m.fall - 12) : Math.abs(m.y - y) < m.amp + 22;
     }
-    function mobNear(x, y) {
-      for (var i = Math.max(0, W.mobs.length - 3); i < W.mobs.length; i++) if (mobHits(W.mobs[i], x, y)) return true;
+    function mobNear(x, y, hw) {
+      for (var i = Math.max(0, W.mobs.length - 3); i < W.mobs.length; i++) if (mobHits(W.mobs[i], x, y, hw)) return true;
       return false;
     }
     // A moving hazard across the leap from a to b. Skipped when it would also threaten a hold.
     function mob(a, b, kind) {
       var s = srcPts(a)[0], bx = cx(b), by = hy(b), mx = (s[0] + bx) / 2, my = (s[1] + by) / 2, m, i;
       if (kind === 'bird') {
-        if (my - s[1] < 36 || by - my < 36) return;
+        if (my - s[1] < 36 || by - my < (b.hw ? 52 : 36)) return;
         m = { kind: kind, y: my, r: 11, w: R(0.9, 1.3), ph: R(0, 6.28) };
       } else {
-        if (Math.abs(bx - s[0]) < 80) return;
+        // keep clear of both ends of the leap, and of the whole width of a ledge
+        var ca = 40 + (a.hw || 0), cb = 40 + (b.hw || 0), gap = Math.abs(bx - a.x);
+        if (a.type === 'moving' || b.type === 'moving' || gap < ca + cb) return;
+        mx = a.x + (bx > a.x ? 1 : -1) * (ca + (gap - ca - cb) / 2);
         // only as tall as the gap it guards, so it cannot reach the holds below or above the pair
         if (kind === 'drip') m = { kind: kind, x: mx, y: Math.max(s[1], by) + 50, r: 10, v: 230, fall: Math.abs(by - s[1]) + 86, period: R(1.9, 2.5), ph: R(0, 3) };
         else m = { kind: kind, x: mx, y: my, amp: Math.abs(by - s[1]) / 2 + 20, r: 13, w: R(1.3, 1.9), ph: R(0, 6.28) };
@@ -223,7 +227,7 @@
       for (i = Math.max(0, W.holds.length - 12); i < W.holds.length; i++) {
         var h = W.holds[i];
         if (h.type === 'plate' || h.type === 'camp') { if (h.type === 'camp' && Math.abs(h.y - my) < 110) return; continue; }
-        if (mobHits(m, cx(h), hy(h))) return;
+        if (h !== a && h !== b && mobHits(m, cx(h), hy(h), h.hw)) return;
       }
       m.id = W.mobs.length; m.d = dist;
       W.mobs.push(m);
@@ -318,7 +322,7 @@
         if (kind === 'leap' || kind === 'vent' || kind === 'slick' || isMob) {
           var type = needRest ? 'ledge' : (kind === 'slick' ? 'slick' : 'grip');
           var range = (kind === 'vent' || kind === 'bird') ? [Math.max(dyR[0], 76), dyR[1]] : dyR;
-          nxt = place(cur, type, mm, range, kind === 'drip' || kind === 'drone' ? 86 : 0);
+          nxt = place(cur, type, mm, range, kind === 'drip' || kind === 'drone' ? 86 + (cur.hw || 0) + (needRest ? 30 : 0) : 0);
           prev = cur;
           if (kind === 'vent') vent(prev, nxt);
           else if (isMob) mob(prev, nxt, kind);

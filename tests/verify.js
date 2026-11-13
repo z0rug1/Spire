@@ -104,7 +104,7 @@ function climb(world, opt) {
     if (!opt.allTools && h.type === 'camp' && h.camp > maxCamp) { maxCamp = h.camp; sim.tools = S.toolsFor(maxCamp); }
     if ((h.type === 'ledge' || h.type === 'camp') && sim.p.stamina < sim.mods.stMax - 0.5) {
       S.step(sim, C.DT);
-      if (sim.p.state === 'dead') { res.stuck = `caught while resting on #${h.id} (seg ${h.seg})`; return res; }
+      if (sim.p.state !== 'hold') { res.stuck = `knocked off or caught while resting on #${h.id} (${h.type}, seg ${h.seg})`; return res; }
       continue;
     }
     const d = decide(sim);

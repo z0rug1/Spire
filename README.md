@@ -13,16 +13,20 @@ Plain HTML, CSS and JavaScript: no build step, no dependencies, no image or audi
   <img src="docs/crown.png" width="19%" alt="The Crown">
 </p>
 
-## Three ways to climb
+## Four ways to climb
 
-- **The story.** You are a courier from the Roots, the lowest floors of a tower eighteen kilometres
+- **The story.** You are a courier from the Roots, the lowest floors of a tower about seventeen kilometres
   tall. The water that flows down from the Crown is failing, and nobody has heard from the Crown in
   a generation. Four districts, 17 camps with the people who live there, three faction choices and
-  three endings, one of them hidden.
+  three endings, one of them hidden. Camps sell upgrades for the chalk you collect, and a tailor
+  sells scarves, glider skins and trails.
 - **The daily tower.** A new short tower every day, the same for everyone, at the same base stats.
   It is timed, and a ghost of your best run that day climbs alongside you.
 - **The endless climb.** A wall with no summit that keeps getting built above you. You have three
-  ropes: a fall costs one and every second camp gives one back. Your best height is kept.
+  ropes: a fall costs one, and every second camp gives one back along with a choice of three perks
+  (air hop, longer grapple, slower slag and so on). Your best height is kept.
+- **Challenge climbs.** Once the story has an ending: the story tower again with modifiers (no
+  pitons, lights out, thin air), a clock, and a split at every district gate.
 
 ## What is on the wall
 
@@ -35,6 +39,7 @@ Plain HTML, CSS and JavaScript: no build step, no dependencies, no image or audi
 | Bounce caps | Throw you straight up to the hold above |
 | Pneumatic tubes | Drop into the funnel, get fired out of the far end |
 | Steam vents, wind bands, wet holds | Knock you off, bend your leap, drain grip faster |
+| Slag drips, wall-swifts, patrol drones | Moving hazards on a fixed rhythm: wait for the gap |
 | Grapple rings (the Works onward) | Tap one to be hauled in |
 | Updrafts (the Gardens onward) | Lift you while you glide |
 | Steel plates (the Crown) | Magnet gloves catch at the top of each hop; some plates go live |
@@ -49,6 +54,7 @@ the Thermal Ladder and the Alternator.
 | Leap | Pull back like a billiards cue (drag away from where you want to go), release | Same, with the left button |
 | Grapple | Tap a ring; if it is out of reach, leap first and tap mid-air | Click |
 | Glide | Hold a finger down mid-air; slide it left or right to steer | Hold and drag |
+| Air hop (endless perk) | Tap mid-air | Click |
 | Magnet plates | Leap onto a steel plate and hop upward | Same |
 | Piton | Piton button, bottom left: sets a checkpoint on the hold you are on | `P` |
 | Pause | Pause button | `Esc` |
@@ -93,7 +99,7 @@ css/style.css         all styling
 js/core.js            physics, tools, hazards and tower generation (no DOM, also runs in Node)
 js/story.js           camp dialogue, characters, choices, upgrades, endings
 js/render.js          canvas renderer; every piece of art is drawn in code
-js/audio.js           sound effects and ambience synthesized with WebAudio
+js/audio.js           sound effects, ambience and a generative soundtrack, synthesized with WebAudio
 js/game.js            input, camps, daily and endless runs, saving, the main loop
 tests/verify.js       an automated climber that proves towers can be climbed
 android/              the Android wrapper (one activity) and its build script
