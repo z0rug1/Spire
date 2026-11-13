@@ -356,6 +356,51 @@
         }
         break;
       }
+      case 'wheel': {           // a mill wheel: draw the hub and spokes once, from the main spoke
+        if (h.k === 0) {
+          var a0 = h.w * t + h.ph, q;
+          ctx.strokeStyle = '#0d0a08'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(h.cx0, h.cy0, h.rad, 0, TAU); ctx.stroke();
+          ctx.strokeStyle = h.d === 2 ? '#9b8a6a' : h.d === 5 ? '#8a6a44' : '#6a5644'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(h.cx0, h.cy0, h.rad, 0, TAU); ctx.stroke();
+          for (q = 0; q < 4; q++) {
+            var qa = a0 + q * 1.5708, qx = h.cx0 + h.rad * Math.sin(qa), qy = h.cy0 - h.rad * Math.cos(qa);
+            ctx.strokeStyle = '#0d0a08'; ctx.lineWidth = 5; line(h.cx0, h.cy0, qx, qy);
+            ctx.strokeStyle = '#8a7356'; ctx.lineWidth = 2.4; line(h.cx0, h.cy0, qx, qy);
+          }
+          ctx.fillStyle = '#0d0a08'; circle(h.cx0, h.cy0, 9); ctx.fillStyle = '#c9a54a'; circle(h.cx0, h.cy0, 6);
+          ctx.fillStyle = '#0d0a08'; circle(h.cx0, h.cy0, 2);
+        }
+        knob(x, y, P, h.d);
+        break;
+      }
+      case 'bell': {            // a bell on a bracket; it swings when rung
+        var rung = sim.bell[h.g], sw2 = rung != null ? Math.sin((t - rung) * 14) * Math.max(0, 1 - (t - rung) / 1.6) * 0.5 : 0;
+        ctx.strokeStyle = '#0d0a08'; ctx.lineWidth = 4; line(x - 14, y + 14, x + 14, y + 14);
+        ctx.save(); ctx.translate(x, y + 14); ctx.rotate(sw2);
+        ctx.fillStyle = '#0d0a08'; ctx.beginPath(); ctx.moveTo(-13, -26); ctx.quadraticCurveTo(-12, -4, -6, -2); ctx.lineTo(6, -2); ctx.quadraticCurveTo(12, -4, 13, -26); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#d9a640'; ctx.beginPath(); ctx.moveTo(-11.5, -25); ctx.quadraticCurveTo(-10.5, -5, -5, -3.5); ctx.lineTo(5, -3.5); ctx.quadraticCurveTo(10.5, -5, 11.5, -25); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fff0b0'; ctx.fillRect(-7, -14, 3, 8);
+        ctx.fillStyle = '#0d0a08'; circle(0, -27, 3.4);
+        ctx.restore();
+        if (rung != null && t - rung < 1.2) { ctx.strokeStyle = 'rgba(255,230,150,' + (1 - (t - rung) / 1.2) + ')'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 18 + (t - rung) * 40, 0, TAU); ctx.stroke(); }
+        break;
+      }
+      case 'timed': {           // answers its bell: solid for a few seconds after it rings, with a draining rim
+        var tl = S.timedLeft(sim, h);
+        if (tl <= 0) {
+          ctx.strokeStyle = 'rgba(217,166,64,.55)'; ctx.lineWidth = 1.6; ctx.setLineDash([2, 4]);
+          ctx.beginPath(); ctx.arc(x, y, 11, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(217,166,64,.5)'; ctx.fillRect(x - 1, y - 4, 2, 6);
+          break;
+        }
+        if (tl < 0.8 && Math.sin(now * 34) > 0) ctx.globalAlpha = 0.45;
+        light('#ffd56a', x, y, 24, 0.4);
+        ctx.fillStyle = '#0d0a08'; circle(x, y, 13); ctx.fillStyle = '#d9a640'; circle(x, y, 11.5);
+        ctx.fillStyle = '#fff0b0'; circle(x - 3, y + 3, 3);
+        ctx.strokeStyle = '#fff6d6'; ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.arc(x, y, 16, Math.PI / 2, Math.PI / 2 + TAU * S.clamp(tl / h.dur, 0, 1)); ctx.stroke();
+        ctx.globalAlpha = 1;
+        break;
+      }
       case 'switch': {          // a sluice lever: the handle points to the colour that runs now
         var lean = (sim.sw ? 1 : -1) * (0.55 - 0.55 * Math.max(0, 1 - (now - flipT) / 0.18) * (sim.sw === flipSw ? 1 : 0));
         ctx.fillStyle = '#0b0f14'; rrect(x - 15, y - 15, 30, 14, 4); ctx.fill();
@@ -578,6 +623,7 @@
         if ((h.type === 'plate') !== (pass === 0)) continue;
         if (h._f === frameNo * 2 + pass) continue; h._f = frameNo * 2 + pass;
         drawHold(h, sim, PAL[h.d], now);
+        if (h.box != null) drawBox(h, sim, now);
       }
     }
     if (sim.pitonHold >= 0) {
@@ -665,6 +711,55 @@
         ctx.fillStyle = '#0a0705'; ctx.fillRect(v.side < 0 ? 0 : C.W - 10, v.y - 6, 10, 12);
       }
     }
+  }
+  function drawBox(h, sim, now) {          // a strongbox bolted beside its hold
+    var x = h.x + 18, y = h.y - 4, open = sim.lore.boxes[h.box];
+    ctx.fillStyle = '#0d0a08'; rrect(x - 10, y - 9, 20, 17, 3); ctx.fill();
+    ctx.fillStyle = open ? '#6a5644' : '#8a6a3a'; rrect(x - 8.5, y - 7.5, 17, 14, 2.5); ctx.fill();
+    ctx.fillStyle = '#c9a54a'; ctx.fillRect(x - 8.5, y + 1, 17, 2);
+    if (open) { ctx.fillStyle = '#0d0a08'; ctx.fillRect(x - 8.5, y + 3, 17, 5); return; }
+    ctx.fillStyle = sim.lore.held > 0 ? '#ffe9a8' : '#2a2018'; circle(x, y - 3, 2.6);
+    if (sim.lore.held > 0) light('#ffe9a8', x, y, 18, 0.4 + 0.2 * Math.sin(now * 5));
+  }
+  function drawLore(Wd, sim, now) {          // letters and keys lying on the wall
+    var b0 = Wd.bucketOf(cam.bottom), b1 = Wd.bucketOf(cam.bottom + viewH), b, i, list, seen = {};
+    for (b = b0; b <= b1; b++) {
+      list = Wd.grid.lore[b]; if (!list) continue;
+      for (i = 0; i < list.length; i++) {
+        var li = list[i]; if (seen[li]) continue; seen[li] = 1;
+        var it = li >= 0 ? Wd.letters[li] : Wd.keys[-1 - li], bob = Math.sin(now * 2 + li) * 2;
+        if (li >= 0 ? sim.lore.letters[it.id] : sim.lore.keys[it.id]) continue;
+        light(li >= 0 ? '#fff3d0' : '#ffe08a', it.x, it.y + bob, 22, 0.55);
+        if (li >= 0) {                       // a folded letter with a red seal
+          ctx.save(); ctx.translate(it.x, it.y + bob); ctx.rotate(Math.sin(now * 1.3 + li) * 0.15);
+          ctx.fillStyle = '#0d0a08'; ctx.fillRect(-9, -6.5, 18, 13);
+          ctx.fillStyle = '#efe4c8'; ctx.fillRect(-8, -5.5, 16, 11);
+          ctx.strokeStyle = 'rgba(90,70,40,.6)'; ctx.lineWidth = 1; line(-8, 5.5, 0, -0.5); line(8, 5.5, 0, -0.5);
+          ctx.fillStyle = '#c0392b'; circle(0, -0.5, 2.6);
+          ctx.restore();
+        } else {                             // a brass key
+          ctx.save(); ctx.translate(it.x, it.y + bob); ctx.rotate(0.5 + Math.sin(now * 1.7 + li) * 0.2);
+          ctx.strokeStyle = '#0d0a08'; ctx.lineWidth = 5; line(-6, 0, 10, 0); ctx.beginPath(); ctx.arc(-9, 0, 5, 0, TAU); ctx.stroke();
+          ctx.strokeStyle = '#f2c94c'; ctx.lineWidth = 2.6; line(-6, 0, 10, 0); ctx.beginPath(); ctx.arc(-9, 0, 5, 0, TAU); ctx.stroke();
+          line(6, 0, 6, -4); line(10, 0, 10, -4);
+          ctx.restore();
+        }
+      }
+    }
+  }
+  function drawCollapse(L, now, dt) {        // The Last Stair: the stair falls away into the dark
+    var y0 = cam.bottom - 30, x, g;
+    if (L < y0 - 200) return;
+    g = ctx.createLinearGradient(0, L + 160, 0, L); g.addColorStop(0, 'rgba(4,6,14,0)'); g.addColorStop(1, 'rgba(4,6,14,.6)');
+    ctx.fillStyle = g; ctx.fillRect(0, L, C.W, 160);
+    if (L < y0) return;
+    ctx.fillStyle = '#03040a'; ctx.beginPath(); ctx.moveTo(0, y0);
+    for (x = 0; x <= C.W; x += 10) ctx.lineTo(x, L + (hsh(x, 3) - 0.5) * 16);
+    ctx.lineTo(C.W, y0); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(127,212,255,.35)'; ctx.lineWidth = 1.4; ctx.beginPath();
+    for (x = 0; x <= C.W; x += 10) { var yy = L + (hsh(x, 3) - 0.5) * 16; if (x) ctx.lineTo(x, yy); else ctx.moveTo(x, yy); }
+    ctx.stroke();
+    if (dt > 0 && Math.random() < 0.7) add(Math.random() * C.W, L + 10, (Math.random() - 0.5) * 30, -40 - Math.random() * 80, -600, 0.8, 2 + Math.random() * 2.5, '#2a3150');
   }
   function drawShards(Wd, sim, now) {
     var b0 = Wd.bucketOf(cam.bottom), b1 = Wd.bucketOf(cam.bottom + viewH), b, i, list, seen = {};
@@ -1041,7 +1136,10 @@
     drawVents(Wd, sim, st.dt);
     drawMobs(Wd, sim, st.now, st.dt);
     drawShards(Wd, sim, st.now);
-    if (sim.rise.on) drawSlag(sim.rise.level, st.now, st.dt);
+    drawLore(Wd, sim, st.now);
+    var riseStyle = sim.rise.on ? Wd.rises[sim.rise.id].style : null;
+    if (riseStyle === 'collapse') drawCollapse(sim.rise.level, st.now, st.dt);
+    else if (riseStyle) drawSlag(sim.rise.level, st.now, st.dt);
     if (st.ghost) drawGhost(st.ghost, st.now);
     drawPlayer(sim, st, PAL[S.districtAt(Wd, sim.p.y)]);
     drawParts();
@@ -1051,7 +1149,7 @@
     screenT();
     drawClouds(Wd, st.now);
     if (set && set.type === 'storm' && sa > 0.01) drawStorm(sa, st.now);
-    if (sim.rise.on) {                      // heat on your heels
+    if (sim.rise.on && riseStyle === 'slag') {   // heat on your heels
       var heat = S.clamp(1 - (sim.p.y - sim.rise.level) / 520, 0, 1);
       if (heat > 0) { ctx.fillStyle = 'rgba(255,90,20,' + 0.22 * heat + ')'; ctx.fillRect(0, 0, cw, ch); }
     }

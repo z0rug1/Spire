@@ -168,6 +168,11 @@
     drip: 'Slag drips on a rhythm. Leap through the gap between drops.',
     bird: 'Wall-swifts fly a fixed beat and will knock you off. Let one pass, then go.',
     drone: 'Patrol drones ride a rail. Touching one costs you grip and your hold.',
+    wheel: 'A mill wheel. Catch a handhold at the bottom, ride it up, and leap off near the top.',
+    bell: 'A bell. When you let go of it, the holds that answer it turn solid for a few seconds. Move fast.',
+    timed: 'These holds only answer a bell. Ring it by leaping off it, then climb before they fade.',
+    key: 'A key. Somewhere above, a strongbox will open for it.',
+    box: 'A strongbox. Bring a key and it opens.',
     switch: 'A sluice lever. Grabbing it flips which colour of hold is solid, blue or amber.',
     gate: 'Faded holds only take your weight while their colour runs. Find the lever.',
     biv: 'A bivouac. Your climb is saved here too.',
@@ -181,6 +186,7 @@
     slag: { name: 'The Furnace Shaft', hint: 'Once you leave this ledge the shaft floods with slag. Keep climbing.' },
     sluice: { name: 'The Sluice Gates', hint: 'Two ladders, blue and amber, and only one is solid at a time. Pull each lever when the other colour leads up.' },
     stacks: { name: 'The Stacks', hint: 'Ride a shelf up, pull the lever at the top, then take the colour that is now solid.' },
+    finale: { name: 'The Last Stair', hint: 'The stair is falling away beneath you. Everything you have learned, one last time.' },
     storm: { name: 'The Thermal Ladder', hint: 'Ride each updraft to its top, then glide across to the next. There is nowhere to land in between.' },
     alt: { name: 'The Alternator', hint: 'Left and right plates take turns going live. Cross when the next one goes dark.' }
   };
@@ -273,7 +279,33 @@
     { id: 'thin', name: 'Thin air', desc: 'Grip drains a third faster' }
   ];
 
-  S.Story = { camps: camps, hints: hints, sets: sets, upgrades: upgrades, endings: endings, epilogue: epilogue,
+
+  // Lost letters, numbered from the bottom of the tower to the top, so they tell the story in the
+  // order a climber finds them. Together they explain how the Crown emptied and who kept its voice.
+  var letters = [
+    { from: 'A Crown surveyor, year 1', text: 'The tower stands. Every floor has water, every floor has light. We are to live at the top and keep the valves. It is a great honour, my wife says. It is very cold, I say.' },
+    { from: 'A child in the Roots, to the Crown', text: 'Dear Crown, please send the water faster, my mum says the moss is going brown. I drew you a picture of our farm. Please write back. Love, Ama (age 7).' },
+    { from: 'Unsigned, a page torn in half', text: '...climbed as high as the Long Ladder and got scared. Grandad says nobody climbs the outside. Grandad says a lot of things.' },
+    { from: 'Sluice log, the Cisterns', text: 'Valve schedule received from the Crown, sealed. Roots allowance: full. Works allowance: full. All tanks running. A good year. W. (Wren\'s grandmother)' },
+    { from: 'Sluice log, the Cisterns, sixty years later', text: 'No schedule this season. Holding all valves as last instructed. Tanks at the brim. I keep thinking I hear somebody on the stair.' },
+    { from: 'Order, Crown seal', text: 'By order of the Crown: the Cistern sluices to the Roots are to remain closed until further notice. Do not write to ask why. The Crown is busy.' },
+    { from: 'A rigger, scratched on a pipe', text: 'Tallow\'s mum rigged this line. Tallow\'s mum\'s mum rigged the one above. Somebody tell me who rigged the Crown, because nobody\'s been up to fix it.' },
+    { from: 'Ration ledger, the Works, margin note', text: 'Ration cut again by Crown order. Copy received from the Gardens. Marrow asks why the Crown\'s orders always come up from below. Told her to mind the furnace.' },
+    { from: 'A furnace-hand, to his brother', text: 'They say the vents need a Crown repair order. I say a wrench needs a hand. Don\'t tell the Quartermaster I fixed number nine myself.' },
+    { from: 'A seed-silk pattern, with a note', text: 'Rides the rising air along the outer wall. Tested from the Glasshouse roof. Do NOT tell the Curator. Love, Pim.' },
+    { from: 'Garden newsletter, spring', text: 'The Curator reads us the Crown\'s new letter: all is well below. A wonderful season for roses. Remember: the stair to the Crown is closed for your safety.' },
+    { from: 'A Gardens servant, unsent', text: 'Every evening a crate of fresh paper goes up to the Archive and every season a crate of letters comes down. Nothing ever goes up to the Crown. Not food. Not people. Nothing.' },
+    { from: 'The first Curator, private', text: 'We came down from the Crown tonight. There was no more food at that height and the children could not breathe. We have told the Gardens we are an embassy. It is only for a little while.' },
+    { from: 'The first Curator, a year later', text: 'If we tell them the Crown is empty, the Works will take the valves and the Gardens will take the Works. So the Crown will write. I will hold the pen until things are calmer.' },
+    { from: 'Quill, apprentice copyist, year one', text: 'Today I was trusted with the Crown\'s own hand. The drafts are beautiful. The Curator says the Crown dislikes visitors, which is why they arrive by his hand.' },
+    { from: 'A Curator, three generations on', text: 'Grandfather meant to give it back. Father meant to give it back. The tower is calm. Why would I be the one to break it?' },
+    { from: 'Seal vault inventory', text: 'Crown seal, original: worn smooth. Copy 1: cracked. Copy 2: in use. Copy 3: in use, Curator\'s balcony. Note: we have never received a seal from above.' },
+    { from: 'Crown Lock, maintenance plate', text: 'Magnet gloves stored here for the use of the valve keepers. Return after every shift. Last signed out: ninety-one years ago.' },
+    { from: 'A logbook page, blown loose', text: 'Day 3 without supplies. The children go first in the morning. I will keep the valves running on their own setting. Someone will come up. Someone always comes up.' },
+    { from: 'Unsigned, in a courier\'s hand', text: 'If you are reading this, you climbed it too. Whatever you decide at the top, write it down and leave it on the wall for the next one. That is how this tower should have worked all along.' }
+  ];
+
+  S.Story = { letters: letters, camps: camps, hints: hints, sets: sets, upgrades: upgrades, endings: endings, epilogue: epilogue,
               perks: perks, looks: looks, challenges: challenges };
   if (typeof module !== 'undefined' && module.exports) module.exports = S;
 })(typeof window !== 'undefined' ? window : globalThis);

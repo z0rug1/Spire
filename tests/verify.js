@@ -115,8 +115,10 @@ function climb(world, opt) {
       if (chalk < cost) break;
       chalk -= cost; upg[u.id]++; oi++; res.bought.push(`${u.id} ${upg[u.id]} at camp ${camp}`);
     }
-    sim.mods.stMax = C.ST_MAX + 20 * upg.lungs; sim.mods.vmax = C.VMAX * (1 + 0.05 * upg.legs); sim.mods.drain = (1 - 0.15 * upg.hands) * drainK;
+    applyUpg();
   };
+  const applyUpg = () => { sim.mods.stMax = C.ST_MAX + 20 * upg.lungs; sim.mods.vmax = C.VMAX * (1 + 0.05 * upg.legs); sim.mods.drain = (1 - 0.15 * upg.hands) * drainK; };
+  if (opt.upg) { Object.assign(upg, opt.upg); applyUpg(); }
   while (sim.p.hold !== summit) {
     const h = world.holds[sim.p.hold];
     collect();
@@ -231,7 +233,9 @@ if (nEnd) {
 const nNg = +arg('--ng') || 0;
 for (let lv = 1; lv <= nNg; lv++) {
   const t3 = Date.now(), w = S.generate(S.ngSeed(lv), S.ngPlan(lv), { lore: true });
-  const rn = climb(w, { think: EXPERT, drainK: S.ngDrain(lv), allTools: true, quiet: true });
+  // New Game+ keeps your upgrades. Check it with fewer than an average climber buys in one playthrough (9).
+  const NG_UPG = { hands: 2, lungs: 2, legs: 1 };
+  const rn = climb(w, { think: EXPERT, drainK: S.ngDrain(lv), allTools: true, quiet: true, upg: NG_UPG });
   if (!rn.ok) { console.error(`New Game+ ${lv}: STUCK at ${rn.stuck}`); process.exit(1); }
-  console.log(`New Game+ ${lv}: climbable by an expert with all tools and no upgrades, ${Math.round(w.top * C.M_PER_UNIT)} m, ${rn.leaps} leaps (${((Date.now() - t3) / 1000).toFixed(0)} s)`);
+  console.log(`New Game+ ${lv}: climbable by an expert with 5 of the 15 upgrades, ${Math.round(w.top * C.M_PER_UNIT)} m, ${rn.leaps} leaps (${((Date.now() - t3) / 1000).toFixed(0)} s)`);
 }

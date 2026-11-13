@@ -190,6 +190,10 @@
         case 'tube': hiss('bandpass', 300, 2600, 2.5, 0.3, 0.28); tone('sine', 90, 240, 0.28, 0.14); break;
         case 'phaseout': tone('sine', 880, 220, 0.18, 0.08); break;
         case 'over': tone('sine', 392, 392, 0.4, 0.09); tone('sine', 311.1, 311.1, 0.5, 0.09, 0.2); tone('sine', 261.6, 261.6, 1.0, 0.1, 0.45); break;
+        case 'bell': tone('sine', 988, 988, 1.4, 0.09); tone('sine', 1480, 1480, 1.0, 0.04); tone('sine', 2490, 2490, 0.5, 0.02); break;
+        case 'page': hiss('bandpass', 2500, 4000, 1.4, 0.25, 0.06); tone('sine', 660, 990, 0.3, 0.05, 0.05); break;
+        case 'key': tone('triangle', 1320, 1320, 0.12, 0.06); tone('triangle', 1760, 1760, 0.2, 0.06, 0.08); break;
+        case 'unlock': tone('square', 220, 160, 0.06, 0.05); tone('square', 330, 260, 0.06, 0.05, 0.1); tone('sine', 660, 990, 0.5, 0.07, 0.2); break;
         case 'lever': tone('square', 160, 110, 0.06, 0.07); hiss('lowpass', 900, 300, 0.7, 0.35, 0.12, 0.05); tone('sine', 330, 330, 0.25, 0.05, 0.12); break;
         case 'hop': hiss('bandpass', 700, 2200, 1.2, 0.14, 0.14); tone('sine', 420, 760, 0.12, 0.08); break;
         case 'peck': tone('square', 900, 500, 0.08, 0.06); hiss('lowpass', 1500, 400, 0.6, 0.18, 0.16); break;

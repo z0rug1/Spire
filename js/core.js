@@ -60,7 +60,8 @@
     MAIN_PLAN[MAIN_PLAN.length - 1].set = 'finale';
   })();
   // New Game+: the same story on a remixed tower, a little harder each time round.
-  S.ngSeed = function (lv) { return lv ? C.SEED + 7919 * lv : C.SEED; };
+  // Only five remixes are generated (and checked by tests/verify.js --ng 5); later rounds cycle through them.
+  S.ngSeed = function (lv) { return lv ? C.SEED + 7919 * ((lv - 1) % 5 + 1) : C.SEED; };
   S.ngPlan = function (lv) {
     if (!lv) return MAIN_PLAN;
     return MAIN_PLAN.map(function (sp) { var o = {}, k; for (k in sp) o[k] = sp[k]; o.hard = Math.min(1, 0.4 + 0.2 * lv); o.tutorial = false; return o; });
@@ -75,7 +76,7 @@
   S.DAILY_PLAN = [{ d: 0, n: 6 }, { d: 4, n: 7, intro: true }, { d: 1, n: 7, intro: true }, { d: 2, n: 7, intro: true }, { d: 5, n: 7, intro: true }, { d: 3, n: 7, intro: true }];
   // Daily towers are seeded by the local date. DAILY_SALT lists the dates whose first seed
   // produced a gap the test climber could not cross (see tests/verify.js --daily).
-  S.DAILY_SALT = { 20261205: 1, 20270225: 1, 20270728: 1, 20280330: 1 };
+  S.DAILY_SALT = { 20270117: 1, 20270528: 1 };
   S.dateKey = function (d) { d = d || new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
   S.dailySeed = function (key) { return (Math.imul(key, 2654435761) + (S.DAILY_SALT[key] || 0) * 7919) >>> 0; };
 

@@ -13,7 +13,7 @@ Plain HTML, CSS and JavaScript: no build step, no dependencies, no image or audi
   <img src="docs/crown.png" width="19%" alt="The Crown">
 </p>
 
-## Four ways to climb
+## Ways to climb
 
 - **The story.** You are a courier from the Roots, the lowest floors of a tower about thirty-five kilometres
   tall. The water that flows down from the Crown is failing, and nobody has heard from the Crown in
@@ -27,6 +27,10 @@ Plain HTML, CSS and JavaScript: no build step, no dependencies, no image or audi
 - **The endless climb.** A wall with no summit that keeps getting built above you. You have three
   ropes: a fall costs one, and every second camp gives one back along with a choice of three perks
   (air hop, longer grapple, slower slag and so on). Your best height is kept.
+- **Lost letters.** Twenty letters hidden on side routes, six of them locked in strongboxes whose
+  keys lie further down. Read in order, they tell how the Crown emptied and who kept its voice.
+- **New Game+.** After an ending: the story again on a remixed, harder tower, keeping your
+  upgrades, looks and letters.
 - **Challenge climbs.** Once the story has an ending: the story tower again with modifiers (no
   pitons, lights out, thin air), a clock, and a split at every district gate.
 
@@ -45,11 +49,18 @@ Plain HTML, CSS and JavaScript: no build step, no dependencies, no image or audi
 | Grapple rings (the Works onward) | Tap one to be hauled in |
 | Updrafts (the Gardens onward) | Lift you while you glide |
 | Steel plates (the Crown) | Magnet gloves catch at the top of each hop; some plates go live |
+| Mill wheels | Catch a handhold at the bottom, ride it up, leap off near the top |
+| Bells and gold holds | Leap off a bell and the gold holds that answer it are solid for a few seconds |
+| Keys and strongboxes | Carry a key up to a strongbox for chalk and a locked letter |
 | Sluice levers and blue/amber holds (the Cisterns onward) | A lever flips which colour is solid; faded holds are the other colour. Decoys with chalk tempt you the wrong way |
 
 Each district also has one hand-built set piece: the Blackout, the Sluice Gates (a two-ladder lever
 puzzle), the Furnace Shaft (rising slag), the Thermal Ladder, the Stacks (shelf lifts and levers)
-and the Alternator.
+and the Alternator. The last climb, the Last Stair, uses every tool while the stair collapses
+beneath you.
+
+The pause menu has a **tower map**: districts and camps you have not reached show as question
+marks, reached districts show chalk and letters found, and red bars show where you fall most.
 
 Grip is the main pressure. It drains faster in each district as the air thins, and an unhurried
 climber will need the riggers' upgrades from the Cisterns on.
@@ -120,6 +131,7 @@ node tests/verify.js                          # the story tower (add -v for a le
 node tests/verify.js --daily 365              # plus the daily towers for the next 365 dates
 node tests/verify.js --daily 365 --salt       # ...and suggest a DAILY_SALT entry for any date that fails
 node tests/verify.js --endless 60             # plus the first 60 segments of the endless climb
+node tests/verify.js --ng 5                    # plus the five New Game+ remixes
 ```
 
 Towers are generated from seeds, so everyone climbs the same walls. The test sends a bot from the

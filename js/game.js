@@ -6,14 +6,16 @@
   var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', KEY_E = 'spire.endless.v1', WORLD_V = 5;
   var STEER_PX = 70;          // finger travel for full glide steering
 
-  var mainWorld = S.generate(C.SEED, S.MAIN_PLAN), world = mainWorld;
+  // baseWorld is the story tower everyone starts on (and challenges use); mainWorld is the tower of the
+  // current playthrough, remixed for New Game+.
+  var baseWorld = S.generate(C.SEED, S.MAIN_PLAN, { lore: true }), mainWorld = baseWorld, world = mainWorld;
   var sim, save, daily, endless, run = null, mode = 'title';      // run: a daily or endless run in progress
   var ptr = { down: false, dead: false, id: -1, sx: 0, sy: 0, x: 0, y: 0, t0: 0, moved: 0, kind: '', noTap: false };
   var aim = null, now = 0, last = 0, acc = 0, respawnAt = 0, dirty = false, saveT = 0, hintT = 0, toastT = 0;
   var curSet = null, setT = 0, nextFlash = 0;
   var dlg = { lines: null, i: 0, typing: false, full: '', shown: 0, done: null, choosing: false, tick: 0, who: '' };
   var hudCache = {};
-  var totalChalk = mainWorld.shards.reduce(function (a, s) { return a + s.v; }, 0);
+  var totalChalk = 0;
   var KM = Math.round(mainWorld.top * C.M_PER_UNIT / 1000);
   var KM_WORD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen',
                  'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'][KM] || String(KM);
@@ -26,6 +28,7 @@
     return { v: 1, wv: WORLD_V, camp: 0, cp: null, maxCamp: 0, visited: { 0: 1 }, seen: {}, chalk: 0, got: 0, upg: {}, flags: {}, taken: {},
              marks: [], falls: 0, time: 0, hints: {}, ending: null, started: false,
              cos: { own: { red: 1, silk: 1, none: 1 }, scarf: 'red', wing: 'silk', trail: 'none' }, ch: null, rec: {},
+             lore: { letters: {}, keys: {}, boxes: {}, held: 0 }, ng: 0, fallSeg: {},
              set: set || { sling: true, aim2: 1, sound: true, music: true, fs: true } };
   }
   function load() {
@@ -36,6 +39,9 @@
         if (s.set.music == null) s.set.music = true;
         if (!s.cos) s.cos = { own: { red: 1, silk: 1, none: 1 }, scarf: 'red', wing: 'silk', trail: 'none' };
         if (!s.rec) s.rec = {};
+        if (!s.lore) s.lore = { letters: {}, keys: {}, boxes: {}, held: 0 };
+        if (!s.fallSeg) s.fallSeg = {};
+        if (!s.ng) s.ng = 0;
         if (s.wv !== WORLD_V) s.ch = null;                                  // a challenge in progress pointed into the old layout
         if ((s.wv || 0) < 5) {        // the Cisterns and the Archive were added: old camps 4-11 moved up 4, 12-16 up 8
           var mv = function (i) { return i < 4 ? i : i < 12 ? i + 4 : i + 8; }, rk = function (o) { var n = {}; for (var k in o) n[mv(+k)] = o[k]; return n; };
@@ -76,11 +82,17 @@
     return {
       stMax: C.ST_MAX + 20 * (u.lungs || 0) + (f.kept ? 10 : 0),
       vmax: C.VMAX * (1 + 0.05 * (u.legs || 0)),
-      drain: (1 - 0.15 * (u.hands || 0)) * (run && run.m.thin ? 1.33 : 1),
+      drain: (1 - 0.15 * (u.hands || 0)) * (run && run.m.thin ? 1.33 : 1) * (run ? 1 : S.ngDrain(save.ng)),
       pitonMax: run && run.m.nopiton ? 0 : 2 + (u.sling || 0) + (f.ledger ? 1 : 0)
     };
   }
-  function tools() { return run ? { grapple: true, glider: true, gloves: true } : S.toolsFor(save.maxCamp); }
+  function tools() { return run || save.ng ? { grapple: true, glider: true, gloves: true } : S.toolsFor(save.maxCamp); }
+  // Builds the story tower for the current New Game+ level.
+  function buildMain() {
+    mainWorld = save.ng ? S.generate(S.ngSeed(save.ng), S.ngPlan(save.ng), { lore: true }) : baseWorld;
+    totalChalk = mainWorld.shards.reduce(function (a, s) { return a + s.v; }, 0);
+    if (!run) world = mainWorld;
+  }
   function applyMods() {
     var m = mods(), k;
     for (k in m) sim.mods[k] = m[k];
@@ -94,7 +106,7 @@
   function startSim() {
     var cp = world.camps[run ? 0 : save.camp].hold, saved = world.holds[run ? run.cp : save.cp];
     if (saved && saved.type === 'camp') cp = saved.id;          // a bivouac or camp reached since
-    sim = S.createSim(world, { checkpoint: cp, taken: run ? {} : save.taken, mods: mods(), tools: tools() });
+    sim = S.createSim(world, { checkpoint: cp, taken: run && run.kind !== 'challenge' ? {} : save.taken, mods: mods(), tools: tools(), lore: save.lore });
     applyLook();
     R.snap(sim, mode === 'title' ? 'title' : 'play');
     aim = null; acc = 0; curSet = null; ptr.down = false; ptr.dead = false;
@@ -206,7 +218,7 @@
   function story(idx) {
     var c = ST.camps[idx];
     var finish = function () {
-      if (c.unlock) {
+      if (c.unlock && !save.ng) {
         A.sfx('tool');
         var k = c.unlock === 'grapple' ? 'anchor' : c.unlock === 'glider' ? 'draft' : 'plate';
         save.hints[k] = 1; toastT = 0; toast(ST.hints[k], 7);
@@ -317,6 +329,8 @@
     }
     panel('<h2>Paused</h2><div class="sub">' + metres(sim.p.y) + ' m &middot; ' + fmtTime(save.time) + ' &middot; ' + save.falls + ' falls</div>' +
       '<button class="btn primary" data-act="resume">Resume</button>' + settings +
+      '<button class="btn" data-act="map">Tower map</button>' +
+      '<button class="btn" data-act="letters">Letters &middot; ' + nLetters() + ' of ' + ST.letters.length + '</button>' +
       '<button class="btn" data-act="tocamp">Return to last camp</button>' +
       '<button class="btn" data-act="title">Save and quit to title</button>');
   }
@@ -326,6 +340,62 @@
   function fsLabel() { return 'Fullscreen: ' + (save.set.fs ? 'on' : 'off'); }
   function panel(html) { $('panel-card').innerHTML = html; $('panel-card').scrollTop = 0; show($('panel')); }
   function closePanel() { hide($('panel')); }
+
+  /* ---------- tower map, letters ---------- */
+  function nLetters() { var n = 0; for (var k in save.lore.letters) n++; return n; }
+  function campName(i) { return ST.camps[i] ? ST.camps[i].name : 'Camp ' + i; }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  function openMap() {
+    var W = mainWorld, C2 = W.camps, seen = save.visited, html, i, di, d, k;
+    var maxF = 1; for (k in save.fallSeg) maxF = Math.max(maxF, save.fallSeg[k]);
+    var found = 0; for (i = 0; i < C2.length; i++) if (seen[i]) found++;
+    html = '<h2>Tower map</h2><div class="sub">' + found + ' of ' + C2.length + ' camps &middot; ' + metres(sim.p.y).toLocaleString('en-US') + ' m now</div><div class="map">';
+    for (di = S.ORDER.length - 1; di >= 0; di--) {
+      d = S.ORDER[di];
+      var idx = [], known = false, chalkT = 0, chalkF = 0, letT = 0, letF = 0;
+      for (i = 0; i < C2.length; i++) if (C2[i].d === d && !(i === C2.length - 1 && C2[i - 1].d !== d)) idx.push(i);
+      idx.forEach(function (j) { if (seen[j]) known = true; });
+      W.shards.forEach(function (sh) { if (S.districtAt(W, sh.y) === d) { chalkT += sh.v; if (save.taken[sh.id]) chalkF += sh.v; } });
+      W.letters.forEach(function (l) { if (S.districtAt(W, l.y) === d) { letT++; if (save.lore.letters[l.id]) letF++; } });
+      html += '<div class="mdist' + (known ? '' : ' unknown') + '"><div class="mhead"><b>' + (known ? S.DISTRICTS[d].name : '? ? ?') + '</b>' +
+        (known ? '<span>&#9670; ' + chalkF + '/' + chalkT + ' &middot; &#9993; ' + letF + '/' + letT + '</span>' : '') + '</div>';
+      for (k = idx.length - 1; k >= 0; k--) {
+        i = idx[k];
+        var here = i === save.camp, f = save.fallSeg[i] || 0, top = i === C2.length - 1;
+        html += '<div class="mrow' + (here ? ' here' : '') + (seen[i] ? '' : ' unknown') + '"><i class="mdot"></i>' +
+          '<span class="mname">' + (seen[i] ? esc(campName(i)) : top ? '? ? ?' : '?') + (here ? ' <em>you</em>' : '') + '</span>' +
+          '<span class="mh">' + (seen[i] ? metres(C2[i].y).toLocaleString('en-US') + ' m' : '? m') + '</span>' +
+          (f && !top ? '<span class="mfall" title="falls on the climb above"><s style="width:' + Math.round(8 + 40 * f / maxF) + 'px"></s>' + f + '</span>' : '<span class="mfall"></span>') + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    var worst = Object.keys(save.fallSeg).map(Number).sort(function (a, b) { return save.fallSeg[b] - save.fallSeg[a]; }).slice(0, 3);
+    if (worst.length) {
+      html += '<h3>Where you fall most</h3>';
+      worst.forEach(function (sg) {
+        html += '<div class="row"><div class="grow"><div class="name">' + esc(campName(sg)) + ' to ' + (seen[sg + 1] ? esc(campName(sg + 1)) : '?') + '</div>' +
+          '<div class="desc">' + S.DISTRICTS[C2[sg].d].name + ', from ' + metres(C2[sg].y).toLocaleString('en-US') + ' m</div></div><b>' + save.fallSeg[sg] + ' falls</b></div>';
+      });
+    }
+    html += '<div style="height:12px"></div><button class="btn primary" data-act="pause">Back</button>';
+    panel(html);
+  }
+  function openLetters() {
+    var html = '<h2>Letters</h2><div class="sub">' + nLetters() + ' of ' + ST.letters.length + ' found</div>', i;
+    for (i = ST.letters.length - 1; i >= 0; i--) {
+      var got = save.lore.letters[i], boxed = i % 3 === 2;
+      html += got ? '<button class="btn pick" data-act="read" data-id="' + i + '">' + (i + 1) + '. ' + esc(ST.letters[i].from) + '</button>'
+                  : '<div class="row unknown"><div class="grow"><div class="name">' + (i + 1) + '. ? ? ?</div><div class="desc">' + (boxed ? 'Locked in a strongbox' : 'Somewhere on a side route') + '</div></div></div>';
+    }
+    html += '<p class="note">Letters are kept for good, across every climb. Keys carried: ' + save.lore.held + '.</p><button class="btn primary" data-act="pause">Back</button>';
+    panel(html);
+  }
+  function readLetter(i, then) {
+    var L = ST.letters[i];
+    closePanel();
+    talk([['Letter ' + (i + 1) + ' of ' + ST.letters.length + ': ' + L.from, L.text]], function () { if (then) { mode = 'pause'; then(); } else resume(); });
+  }
 
   function toggleSetting(k) {
     save.set[k] = !save.set[k];
@@ -374,6 +444,10 @@
     else if (act === 'ch-resume') { closePanel(); startChallenge(save.ch.m, true); }
     else if (act === 'ch-drop') { save.ch = null; persist(); openChallenges(); }
     else if (act === 'ch-back') { closePanel(); mode = 'title'; }
+    else if (act === 'map') openMap();
+    else if (act === 'letters') openLetters();
+    else if (act === 'pause') renderPause();
+    else if (act === 'read') { var li = +t.getAttribute('data-id'); readLetter(li, openLetters); }
     else if (act === 'run-quit') { closePanel(); leaveRun(); }
   });
 
@@ -467,7 +541,7 @@
   function startChallenge(m, resumeIt) {
     var ch = resumeIt ? save.ch : null, mm = {};
     ST.challenges.forEach(function (c) { if (m[c.id]) mm[c.id] = 1; });
-    world = mainWorld; R.setWorld();
+    world = baseWorld; R.setWorld();
     run = { kind: 'challenge', m: mm, started: true, t0: 0, time: ch ? ch.time : 0, rec: [], falls: ch ? ch.falls : 0, done: false, maxY: 0,
             cp: ch ? ch.cp : null, splits: ch ? ch.splits.slice() : [], camp: ch ? ch.camp : 0 };
     if (!resumeIt) { save.ch = { m: mm, cp: world.camps[0].hold, time: 0, falls: 0, splits: [], camp: 0 }; persist(); }
@@ -552,6 +626,9 @@
     $('set-aim').textContent = aimLabel(); $('set-sound').textContent = soundLabel(); $('set-fs').textContent = fsLabel();
     $('set-music').textContent = musicLabel();
     $('btn-chal').classList.toggle('hidden', !save.ending);
+    $('btn-ng').classList.toggle('hidden', !save.ending);
+    $('btn-ng').removeAttribute('data-sure');
+    $('btn-ng').innerHTML = 'New Game+ ' + (save.ng + 1) + '<small>A remixed, harder tower. Keep upgrades, looks and letters</small>';
     $('chal-sub').textContent = save.ch ? 'In progress: ' + fmtLong(save.ch.time) : 'Modifiers, a clock and splits';
     show($('title'));
   }
@@ -576,6 +653,16 @@
   });
   $('btn-daily').addEventListener('click', startDaily);
   $('btn-endless').addEventListener('click', startEndless);
+  $('btn-ng').addEventListener('click', function () {
+    var b = $('btn-ng');
+    if (!b.getAttribute('data-sure')) { b.setAttribute('data-sure', '1'); b.innerHTML = 'Start New Game+ ' + (save.ng + 1) + '?<small>This climb\'s camps and choices are cleared</small>'; return; }
+    var keep = save;
+    save = freshSave(keep.set);
+    ['upg', 'chalk', 'cos', 'rec', 'lore', 'hints', 'fallSeg'].forEach(function (k) { save[k] = keep[k]; });
+    save.ng = keep.ng + 1; save.lore.keys = {};
+    buildMain();
+    enterGame();
+  });
   $('btn-chal').addEventListener('click', function () { A.init(); A.sfx('ui'); chSel = {}; openChallenges(); });
   $('set-music').addEventListener('click', function () { A.init(); toggleSetting('music'); $('set-music').textContent = musicLabel(); });
   $('set-aim').addEventListener('click', function () { toggleSetting('sling'); $('set-aim').textContent = aimLabel(); });
@@ -670,14 +757,20 @@
             save.falls++; dirty = true;
             if (p.lastHold >= 0) {
               h = world.holds[p.lastHold];
+              save.fallSeg[h.seg] = (save.fallSeg[h.seg] || 0) + 1;
               save.marks.push([Math.round(h.x + (Math.random() - 0.5) * 16), Math.round(h.type === 'plate' ? h.y0 : h.y)]);
               if (save.marks.length > 40) save.marks.shift();
             }
           }
           A.sfx('fall'); vibrate(40); respawnAt = now + 0.85; fade(1); aim = null;
           break;
-        case 'rise': A.sfx('rumble'); R.shake(6); toast('The shaft is flooding. Climb!', 3); break;
-        case 'burn': A.sfx('burn'); toast('The slag caught you.', 2.5); break;
+        case 'rise': A.sfx('rumble'); R.shake(6); toast(e.a === 'collapse' ? 'The stair is collapsing. Climb!' : 'The shaft is flooding. Climb!', 3); break;
+        case 'burn': A.sfx(e.a === 'collapse' ? 'fall' : 'burn'); toast(e.a === 'collapse' ? 'The stair fell away under you.' : 'The slag caught you.', 2.5); break;
+        case 'letter': A.sfx('page'); save.lore.letters[e.a] = 1; persist(); readLetter(e.a, null); break;
+        case 'key': A.sfx('key'); persist(); toast('A key. A strongbox above will open for it.' + (save.lore.held > 1 ? ' (' + save.lore.held + ' carried)' : ''), 3.5); break;
+        case 'box': A.sfx('unlock'); save.chalk += 15; persist(); toast('The strongbox opens: 15 chalk and a letter.', 3); readLetter(e.a, null); break;
+        case 'locked': if (now > toastT) toast('A locked strongbox. Its key is somewhere below.', 3); break;
+        case 'bell': A.sfx('bell'); break;
         case 'crumble': A.sfx('crumble'); R.emit('debris', world.holds[e.a].x, world.holds[e.a].y, 9); R.shake(3); break;
         case 'slip': A.sfx('slip'); R.shake(2); toast('Your grip gave out.', 2); break;
         case 'knock': A.sfx('knock'); R.shake(6); vibrate(20); break;
@@ -848,6 +941,7 @@
 
   /* ---------- boot ---------- */
   save = load() || freshSave();
+  buildMain();
   daily = loadDaily();
   R.init(cv);
   startSim();
