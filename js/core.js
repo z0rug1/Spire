@@ -16,7 +16,7 @@
     FALL_DEATH: 720,   // drop below your last apex that ends the attempt
     VTERM: 1500,
     ST_MAX: 100, ST_DRAIN: 9, ST_LEAP: 7, ST_REST: 36, ST_GLIDE: 12, ST_GRAPPLE: 8,
-    THIN: [1, 1.15, 1.3, 1.5],   // grip drains faster in each district: the air thins as you climb
+    THIN: [1, 1.2, 1.3, 1.5, 1.1, 1.4],   // grip drains faster in each district (by index): the air thins as you climb
     GRAPPLE_R: 250, ZIP_SPEED: 1500,
     GLIDE_FALL: 80, GLIDE_EASE: 3.2, GLIDE_VX: 240, UPDRAFT_V: 330,
     CRUMBLE_T: 0.9, CRUMBLE_BACK: 3.5,
@@ -36,33 +36,46 @@
     { key: 'gardens', name: 'The Gardens', nodes: [11, 13], dy: [66, 135], margin: 0.80, restEvery: 4,
       kinds: { leap: 6, slick: 3, wind: 3, updraft: 3, grapple: 2, moving: 2, crumble: 1, spring: 3, phase: 3, bird: 5 }, intro: 'updraft' },
     { key: 'crown', name: 'The Crown', nodes: [11, 13], dy: [70, 145], margin: 0.84, restEvery: 4,
-      kinds: { leap: 5, plate: 4, eplate: 3, grapple: 2, updraft: 2, vent: 2, moving: 2, crumble: 2, phase: 3, lift: 3, tube: 3, drone: 5 }, intro: 'plate' }
+      kinds: { leap: 5, plate: 4, eplate: 3, grapple: 2, updraft: 2, vent: 2, moving: 2, crumble: 2, phase: 3, lift: 3, tube: 3, drone: 5, switch: 2 }, intro: 'plate' },
+    // Added later, so their index is not their place in the tower: see ORDER.
+    { key: 'cisterns', name: 'The Cisterns', nodes: [10, 12], dy: [60, 110], margin: 0.73, restEvery: 3,
+      kinds: { leap: 8, slick: 3, switch: 4, crumble: 2, moving: 2, spring: 2 }, intro: 'switch' },
+    { key: 'archive', name: 'The Archive', nodes: [11, 13], dy: [68, 140], margin: 0.82, restEvery: 4,
+      kinds: { leap: 6, switch: 4, phase: 3, lift: 3, updraft: 2, grapple: 2, moving: 2, crumble: 2, wind: 2 }, intro: 'switch' }
   ];
+  // The districts from the bottom of the tower to the top, and each district's place in that order.
+  var ORDER = S.ORDER = [0, 4, 1, 2, 5, 3];
+  S.RANK = []; ORDER.forEach(function (d, i) { S.RANK[d] = i; });
   var SEGS = 4; // segments (camp to camp) per district in the main tower
 
   // A plan is the list of segments a tower is built from. `set` marks a hand-built set piece;
   // `parts: 2` splits the segment in two with a bivouac (an unnamed checkpoint) in the middle.
   var MAIN_PLAN = S.MAIN_PLAN = [];
   (function () {
-    var sets = { 2: 'dark', 6: 'slag', 10: 'storm', 14: 'alt' };
-    for (var i = 0; i < SEGS * 4; i++)
-      MAIN_PLAN.push({ d: i >> 2, set: sets[i] || null, tutorial: i === 0, intro: i % SEGS === 0, parts: 2 });
+    var sets = { 0: 'dark', 4: 'sluice', 1: 'slag', 2: 'storm', 5: 'stacks', 3: 'alt' };
+    for (var i = 0; i < SEGS * ORDER.length; i++) {
+      var d = ORDER[Math.floor(i / SEGS)], k = i % SEGS;
+      MAIN_PLAN.push({ d: d, set: k === 2 ? sets[d] : null, tutorial: i === 0, intro: k === 0, parts: 3 });
+    }
   })();
-  S.DAILY_PLAN = [{ d: 0, n: 7 }, { d: 1, n: 8, intro: true }, { d: 2, n: 8, intro: true }, { d: 3, n: 8, intro: true }];
+  // A tool is handed over at the first camp of its district.
+  function firstCamp(d) { for (var i = 0; i < MAIN_PLAN.length; i++) if (MAIN_PLAN[i].d === d) return i; return 1e9; }
+  S.TOOL_AT = { grapple: firstCamp(1), glider: firstCamp(2), gloves: firstCamp(3) };
+  S.DAILY_PLAN = [{ d: 0, n: 6 }, { d: 4, n: 7, intro: true }, { d: 1, n: 7, intro: true }, { d: 2, n: 7, intro: true }, { d: 5, n: 7, intro: true }, { d: 3, n: 7, intro: true }];
   // Daily towers are seeded by the local date. DAILY_SALT lists the dates whose first seed
   // produced a gap the test climber could not cross (see tests/verify.js --daily).
   S.DAILY_SALT = { 20270512: 1, 20270805: 1, 20280424: 1 };
   S.dateKey = function (d) { d = d || new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
   S.dailySeed = function (key) { return (Math.imul(key, 2654435761) + (S.DAILY_SALT[key] || 0) * 7919) >>> 0; };
 
-  // The endless climb: segment L of a tower with no top. It cycles through the four districts,
+  // The endless climb: segment L of a tower with no top. It cycles through the six districts,
   // drops in a set piece every fifth segment, and gets harder for the first twenty segments.
   S.ENDLESS_SEED = 77261112;
   S.endlessSeg = function (L) {
-    var hard = Math.min(1, L / 20), sp = { d: L % 4, hard: hard, n: 8 + Math.round(4 * hard) };
+    var hard = Math.min(1, L / 20), sp = { d: ORDER[L % ORDER.length], hard: hard, n: 8 + Math.round(4 * hard) };
     if (L % 5 === 4) {
-      sp.set = ['slag', 'storm', 'alt', 'dark'][Math.floor(L / 5) % 4];
-      sp.d = { slag: 1, storm: 2, alt: 3, dark: 0 }[sp.set];
+      sp.set = ['slag', 'sluice', 'storm', 'stacks', 'alt', 'dark'][Math.floor(L / 5) % 6];
+      sp.d = { slag: 1, storm: 2, alt: 3, dark: 0, sluice: 4, stacks: 5 }[sp.set];
       sp.riseSpeed = 25 + 10 * hard;
     }
     return sp;
@@ -123,6 +136,7 @@
     var W = { holds: [], vents: [], winds: [], drafts: [], shards: [], camps: [], anchors: [], springs: [], tubes: [], mobs: [],
               gates: [], bands: [], sets: [], rises: [], segs: 0 };
     var mainIdx = 0, seg = 0, dist = 0;
+    var gsw = 0;                   // where the sluice switches stand when the climber gets here along the route
 
     function mk(type, x, y) {
       var h = { type: type, x: x, y: y, r: 12 };
@@ -132,6 +146,7 @@
         h.w = R(1.3, 2.0); h.ph = R(0, 6.28);
       } else if (type === 'anchor') h.r = 10;
       else if (type === 'phase') { h.period = 3.2; h.on = 2.0; h.ph = R(0, 3.2); }
+      else if (type === 'gate') h.col = gsw;           // solid only while the sluices stand at this colour
       else if (type === 'lift') {            // a hook on a counterweight: rides between (x0,y0) and (x0+ax,y0+ay)
         h.ay = R(240, 320); h.ax = R(-40, 40);
         h.x0 = clamp(x, 34 + Math.max(0, -h.ax), 326 - Math.max(0, h.ax)); h.y0 = y;
@@ -143,6 +158,7 @@
     function commit(h, side) {
       h.id = W.holds.length; h.seg = seg; h.d = dist; h.side = !!side;
       h.main = side ? mainIdx : (W.holds.length ? ++mainIdx : 0);
+      if (h.type === 'camp') h.sw = gsw;
       W.holds.push(h);
       if (h.type === 'anchor') W.anchors.push(h.id);
       return h;
@@ -258,6 +274,20 @@
       }
       W.vents.push({ id: W.vents.length, side: side, y: y, x0: x0, x1: x1, period: R(2.6, 3.2), dur: 0.9, ph: R(0, 3) });
     }
+    // A switch puzzle: a lever that flips the sluices, then holds of the new colour leading on. A decoy
+    // of the old colour, with chalk on it, is solid until you pull the lever.
+    function switchRun(m, dyR) {
+      var sw = place(cur, 'switch', m, dyR), j, k = 2 + (rnd() < 0.5 ? 1 : 0), prev = cur, t0;
+      gsw ^= 1;
+      advance(sw);
+      t0 = top(prev);
+      var dc = mk('gate', clamp(cx(prev) + (cx(sw) > cx(prev) ? -1 : 1) * R(70, 110), 40, 320), t0 + R(50, 95));
+      dc.col = gsw ^ 1;
+      if (reach(prev, dc, m) && Math.abs(dc.x - cx(sw)) > 60 && !nearVent(dc.y) && !mobNear(dc.x, dc.y)) {
+        commit(dc, true); dc.main = prev.main; shard(dc.x, dc.y + 18, 2);
+      }
+      for (j = 0; j < k; j++) { var g = place(cur, 'gate', m, dyR); if (rnd() < 0.5) between(cur, g); advance(g); }
+    }
     function pick(kinds) {
       var tot = 0, k;
       for (k in kinds) tot += kinds[k];
@@ -338,6 +368,9 @@
             if (rnd() < 0.5) between(cur, nxt);
             advance(nxt);
           }
+        } else if (kind === 'switch') {
+          if (needRest || cur.type === 'phase' || cur.type === 'crumble' || cur.type === 'plate' || cur.type === 'lift') { advance(place(cur, needRest ? 'ledge' : 'grip', mm, dyR)); }
+          else switchRun(mm, dyR);
         } else if (kind === 'moving' || kind === 'phase') {
           advance(place(cur, kind, mm, dyR));
         } else if (kind === 'lift') {
@@ -388,7 +421,7 @@
       var two = (sp.parts || 1) > 1;
       sinceRest = 0; count = 0;
 
-      if (two) { standard(sp, cfg, !!sp.tutorial, !!sp.intro); bivouac(); setY0 = cur.y; }
+      for (var pk = 1; pk < (sp.parts || 1); pk++) { standard(sp, cfg, pk === 1 && !!sp.tutorial, pk === 1 && !!sp.intro); bivouac(); setY0 = cur.y; }
 
       if (sp.set === 'slag') {
         // The Furnace Shaft: grapple up a flooding shaft. Slag rises from the moment you leave the first ledge.
@@ -418,6 +451,43 @@
           }
           var fin = mk('ledge', xs[2], col.y1 - 34); fin.hw = 26; fin.x = xs[2]; fin.viaDraft = true; fin.ladder = wps;
           advance(fin);
+        }
+      } else if (sp.set === 'sluice') {
+        // The Sluice Gates: two interleaved ladders, blue and amber, and levers between them.
+        // Only one ladder is solid at a time; you have to pull the right lever at the right rung.
+        ledgeAt(180, top(cur) + 78, 34);
+        var side0 = rnd() < 0.5 ? -1 : 1;
+        for (k2 = 0; k2 < 4; k2++) {
+          var sx = 180 + side0 * (k2 % 2 ? -1 : 1) * R(18, 34), lever = mk('switch', sx, top(cur) + R(70, 84));
+          gsw ^= 1; advance(lever);
+          for (j = 0; j < 2; j++) {
+            var lx = 180 + (gsw ? 1 : -1) * R(78, 96), ly = cur.y + R(78, 92);
+            var gt = mk('gate', lx, ly); advance(gt);
+            var dco = mk('gate', 360 - lx, ly + R(-8, 8)); dco.col = gsw ^ 1; commit(dco, true); dco.main = gt.main;
+            if (j === 1 && k2 % 2) shard(360 - lx, ly + 20, 1);
+          }
+          if (k2 === 1) ledgeAt(180, cur.y + R(76, 86), 30);
+        }
+        ledgeAt(180, cur.y + R(76, 86), 32);
+      } else if (sp.set === 'stacks') {
+        // The Stacks: shelves ride up and down between the reading ledges; each shelf ends at a lever
+        // that decides which pages above are solid.
+        ledgeAt(180, top(cur) + 78, 34);
+        for (k2 = 0; k2 < 3; k2++) {
+          var dir2 = k2 % 2 ? -1 : 1;
+          var sh = mk('lift', 180 + dir2 * R(50, 70), top(cur) + R(70, 82)); sh.ax = dir2 * R(-10, 10); sh.ay = R(250, 290);
+          sh.x0 = clamp(sh.x0, 40, 320); sh.x = sh.x0 + sh.ax / 2; sh.y = sh.y0 + sh.ay / 2;
+          advance(sh);
+          var lv = mk('switch', clamp(sh.x0 + sh.ax - dir2 * R(70, 90), 40, 320), sh.y0 + sh.ay + R(40, 60));
+          gsw ^= 1; advance(lv);
+          for (j = 0; j < 2; j++) {
+            var px2 = clamp(cx(cur) + (j ? -1 : 1) * dir2 * R(70, 100), 40, 320), g2 = mk('gate', px2, top(cur) + R(72, 90));
+            advance(g2);
+            var dk = mk('gate', clamp(360 - px2, 40, 320), g2.y + R(-6, 10)); dk.col = gsw ^ 1;
+            if (Math.abs(dk.x - px2) > 60) { commit(dk, true); dk.main = g2.main; }
+          }
+          ledgeAt(clamp(cx(cur) + R(-40, 40), 60, 300), cur.y + R(74, 86), 30);
+          shard(cur.x + 30, cur.y + 60, 1);
         }
       } else if (sp.set === 'alt') {
         // The Alternator: left and right plates take turns going live.
@@ -506,7 +576,7 @@
     return null;
   };
   S.toolsFor = function (maxCamp) {
-    return { grapple: maxCamp >= SEGS, glider: maxCamp >= SEGS * 2, gloves: maxCamp >= SEGS * 3 };
+    return { grapple: maxCamp >= S.TOOL_AT.grapple, glider: maxCamp >= S.TOOL_AT.glider, gloves: maxCamp >= S.TOOL_AT.gloves };
   };
 
   /* ---------- simulation ---------- */
@@ -518,7 +588,7 @@
       world: world, t: 0, ghost: false, events: [],
       tools: o.tools || { grapple: false, glider: false, gloves: false },
       mods: o.mods || { stMax: C.ST_MAX, vmax: C.VMAX, drain: 1, pitonMax: 2 },
-      crumble: {}, taken: o.taken || {}, rise: { on: false, id: -1, level: -1e9 },
+      crumble: {}, taken: o.taken || {}, rise: { on: false, id: -1, level: -1e9 }, sw: 0, cpSw: 0,
       checkpoint: o.checkpoint != null ? o.checkpoint : world.camps[0].hold,
       pitons: 0, pitonHold: -1,
       p: { x: 0, y: 0, vx: 0, vy: 0, state: 'hold', hold: -1, stamina: C.ST_MAX, lastHold: -1, lastHoldT: -9,
@@ -542,8 +612,10 @@
     } else { p.x = holdX(h, sim.t); p.y = holdY(h, sim.t); }
     p.apexY = p.y;
     if (h.type === 'crumble') sim.crumble[h.id] = { t0: sim.t, back: 0 };
+    if (h.type === 'switch' && !sim.respawning) { sim.sw ^= 1; ev(sim, 'switch', h.id); }
     if (h.type === 'camp') {
       sim.checkpoint = h.id; sim.pitonHold = -1; sim.pitons = sim.mods.pitonMax;
+      sim.sw = h.sw || 0;
       if (h.biv) ev(sim, 'biv', h.id); else ev(sim, 'camp', h.camp);
     }
   }
@@ -559,9 +631,10 @@
     p.springT = -9; p.tubeT = -9;
     p.stamina = sim.mods.stMax;
     var keepEvents = sim.ghost;
-    sim.ghost = true;                       // do not re-announce the camp on respawn
+    sim.ghost = true; sim.respawning = true;      // do not re-announce the camp or pull a lever on respawn
+    sim.sw = h.type === 'camp' ? (h.sw || 0) : sim.cpSw;
     attach(sim, h, h.x, h.y);
-    sim.ghost = keepEvents;
+    sim.ghost = keepEvents; sim.respawning = false;
   }
   S.respawn = respawn;
 
@@ -618,7 +691,7 @@
     var h = sim.world.holds[p.hold];
     if (h.type !== 'grip' && h.type !== 'ledge' && h.type !== 'anchor' && h.type !== 'slick') return false;
     if (h.id === sim.pitonHold) return false;
-    sim.pitonHold = h.id; sim.checkpoint = h.id; sim.pitons--;
+    sim.pitonHold = h.id; sim.checkpoint = h.id; sim.pitons--; sim.cpSw = sim.sw;
     ev(sim, 'piton', h.id);
     return true;
   }
@@ -635,6 +708,9 @@
                Math.abs(p.x - h.x) <= h.hw + 2 && p.y >= h.y0 && p.y <= h.y1;
       case 'phase':
         if (!phaseOn(h, t)) return false;
+        break;
+      case 'gate':
+        if (sim.sw !== h.col) return false;
         break;
       case 'crumble':
         var c = sim.crumble[h.id];
@@ -775,6 +851,7 @@
         }
       }
       if (h.type === 'phase' && !phaseOn(h, t)) { drop(sim, 'phaseout', h.id); return; }
+      if (h.type === 'gate' && sim.sw !== h.col) { drop(sim, 'phaseout', h.id); return; }
       if (h.type === 'plate' && plateOn(h, t) && !sim.mods.insulated) {
         detach(sim);
         p.vx = (p.x < C.W / 2 ? 1 : -1) * 160; p.vy = -40; p.noGrabT = t + 0.5; p.hitT = t;
@@ -849,7 +926,7 @@
   function cloneSim(s) {
     var c = { world: s.world, t: s.t, ghost: true, events: [], tools: s.tools, mods: s.mods, crumble: {},
               taken: s.taken, checkpoint: s.checkpoint, pitons: s.pitons, pitonHold: s.pitonHold, p: {},
-              rise: { on: s.rise.on, id: s.rise.id, level: s.rise.level } }, k;
+              rise: { on: s.rise.on, id: s.rise.id, level: s.rise.level }, sw: s.sw, cpSw: s.cpSw }, k;
     for (k in s.p) c.p[k] = s.p[k];
     for (k in s.crumble) c.crumble[k] = { t0: s.crumble[k].t0, back: s.crumble[k].back };
     return c;
