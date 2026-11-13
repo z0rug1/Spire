@@ -40,6 +40,8 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #banner small { display: block; font-family: var(--ui); font-size: 11px; font-weight: 600; letter-spacing: .3em; color: var(--gold); margin-bottom: 8px; }
 #banner.show { animation: banner 3.4s ease both; }
 @keyframes banner { 0% { opacity: 0; letter-spacing: .5em; } 14% { opacity: 1; letter-spacing: .22em; } 78% { opacity: 1; } 100% { opacity: 0; } }
+.duo { display: flex; gap: 10px; margin-top: 10px; }
+.title-box .duo .btn { margin-top: 0; padding: 9px 8px; font-size: 15px; }
 .btn small { display: block; font-size: 12px; font-weight: 600; opacity: .7; margin-top: 2px; }
 .btn small:empty { display: none; }
 .round { width: 42px; height: 42px; border-radius: 50%; background: rgba(10, 12, 14, .55); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 5px; }

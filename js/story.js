@@ -9,7 +9,7 @@
       ['Sedge', 'The drip-lines ran dry again this morning. Third time this month.'],
       ['Sedge', 'Water falls from the Crown. Always has. So does the word of the Crown, only nobody down here has heard that word since before I was born.'],
       ['Sedge', "You're the best courier in the Roots. Take our petition up. All the way up. Put it in the Crown's own hands."],
-      ['', 'More than seven kilometres of wall. Nobody from the Roots has ever climbed past the Works.']
+      ['', '{km} kilometres of wall. Nobody from the Roots has ever climbed past the Works.']
     ] },
     { name: 'Drip Market', npcs: [{ who: 'Moss-seller', x: 32, coat: '#5f7f6a', hat: 'hood', hatCol: '#3c5a4a', prop: 'basket' }], lines: [
       ['Moss-seller', 'A courier, heading up? Then keep an eye out for chalk. Climbers before you left it on the hard routes.'],
@@ -95,7 +95,7 @@
       ['', "The Crown's letters were never sent from the Crown."]
     ] },
     { name: 'Last Light', lines: [
-      ['', 'The air is thin. Below you, more than seven kilometres of lamps: the Gardens, the Works, the Roots, all still waiting for word.'],
+      ['', 'The air is thin. Below you, {km} kilometres of lamps: the Gardens, the Works, the Roots, all still waiting for word.'],
       ['', 'One more wall.']
     ] },
     { name: 'The Crown Chamber', lines: [
@@ -120,6 +120,11 @@
     draft: 'Hold a finger down mid-air to glide, and slide it left or right to steer. Updrafts lift you.',
     plate: 'Magnet gloves catch a steel plate at the top of your leap. Hop upward.',
     eplate: 'A flickering plate is about to go live. Be off it in time.',
+    spring: 'Bounce caps throw you straight up. Land on one and ride it to the hold above.',
+    tube: 'Drop into a green funnel and the tube fires you out of its far end.',
+    lift: 'Hooks ride up and down their rail and wait a moment at each end. Catch one, then leap off at the top.',
+    phase: 'These holds come and go. A flicker means one is about to vanish.',
+    biv: 'A bivouac. Your climb is saved here too.',
     piton: 'Tap the piton button on a hold to set a checkpoint there.',
     camp: 'Camp reached. Your climb is saved here.'
   };
@@ -133,10 +138,10 @@
   };
 
   var upgrades = [
-    { id: 'lungs', name: 'Deep Lungs', desc: '+20 grip', costs: [15, 30, 50] },
-    { id: 'legs', name: 'Spring Legs', desc: '+5% leap power', costs: [20, 40, 60] },
-    { id: 'hands', name: 'Steady Hands', desc: 'Grip drains 15% slower', costs: [15, 30, 50] },
-    { id: 'sling', name: 'Piton Sling', desc: '+1 piton per camp', costs: [25, 50] }
+    { id: 'lungs', name: 'Deep Lungs', desc: '+20 grip', costs: [15, 30, 50, 80] },
+    { id: 'legs', name: 'Spring Legs', desc: '+5% leap power', costs: [20, 40, 60, 90] },
+    { id: 'hands', name: 'Steady Hands', desc: 'Grip drains 15% slower', costs: [15, 30, 50, 80] },
+    { id: 'sling', name: 'Piton Sling', desc: '+1 piton per camp', costs: [25, 50, 80] }
   ];
 
   var endings = {

@@ -3,21 +3,27 @@
   'use strict';
   var S = window.Spire, C = S.C, R = S.Render, A = S.Audio, ST = S.Story;
   var $ = function (id) { return document.getElementById(id); };
-  var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', WORLD_V = 2;
+  var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', KEY_E = 'spire.endless.v1', WORLD_V = 3;
   var STEER_PX = 70;          // finger travel for full glide steering
 
   var mainWorld = S.generate(C.SEED, S.MAIN_PLAN), world = mainWorld;
-  var sim, save, daily, run = null, mode = 'title';
+  var sim, save, daily, endless, run = null, mode = 'title';      // run: a daily or endless run in progress
   var ptr = { down: false, dead: false, id: -1, sx: 0, sy: 0, x: 0, y: 0, t0: 0, moved: 0, kind: '', noTap: false };
   var aim = null, now = 0, last = 0, acc = 0, respawnAt = 0, dirty = false, saveT = 0, hintT = 0, toastT = 0;
   var curSet = null, setT = 0, nextFlash = 0;
   var dlg = { lines: null, i: 0, typing: false, full: '', shown: 0, done: null, choosing: false, tick: 0, who: '' };
   var hudCache = {};
   var totalChalk = mainWorld.shards.reduce(function (a, s) { return a + s.v; }, 0);
+  var KM = Math.round(mainWorld.top * C.M_PER_UNIT / 1000);
+  var KM_WORD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen',
+                 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'][KM] || String(KM);
+  function fill(text) {         // {km} in story text is the real height of the tower
+    return text.replace('{km}', text.indexOf('{km}') === 0 ? KM_WORD.charAt(0).toUpperCase() + KM_WORD.slice(1) : KM_WORD);
+  }
 
   /* ---------- save ---------- */
   function freshSave(set) {
-    return { v: 1, wv: WORLD_V, camp: 0, maxCamp: 0, visited: { 0: 1 }, seen: {}, chalk: 0, got: 0, upg: {}, flags: {}, taken: {},
+    return { v: 1, wv: WORLD_V, camp: 0, cp: null, maxCamp: 0, visited: { 0: 1 }, seen: {}, chalk: 0, got: 0, upg: {}, flags: {}, taken: {},
              marks: [], falls: 0, time: 0, hints: {}, ending: null, started: false,
              set: set || { sling: true, aim2: 1, sound: true, fs: true } };
   }
@@ -26,7 +32,7 @@
       var s = JSON.parse(localStorage.getItem(KEY));
       if (s && s.v === 1 && s.set) {
         if (!s.set.aim2) { s.set.sling = true; s.set.aim2 = 1; }           // pull-back aiming became the default
-        if (s.wv !== WORLD_V) { s.taken = {}; s.marks = []; s.wv = WORLD_V; }   // the tower layout changed
+        if (s.wv !== WORLD_V) { s.taken = {}; s.marks = []; s.cp = null; s.wv = WORLD_V; }   // the tower layout changed
         return s;
       }
     } catch (e) {}
@@ -42,6 +48,11 @@
     return { date: k, best: 0, ghost: null, tries: 0 };
   }
   function persistDaily() { try { localStorage.setItem(KEY_D, JSON.stringify(daily)); } catch (e) {} }
+  function loadEndless() {
+    try { var d = JSON.parse(localStorage.getItem(KEY_E)); if (d && d.best >= 0) return d; } catch (e) {}
+    return { best: 0, runs: 0 };
+  }
+  function persistEndless() { try { localStorage.setItem(KEY_E, JSON.stringify(endless)); } catch (e) {} }
 
   function mods() {
     if (run) return { stMax: C.ST_MAX, vmax: C.VMAX, drain: 1, pitonMax: 2 };    // daily runs are at base stats for everyone
@@ -60,7 +71,9 @@
     sim.tools = tools();
   }
   function startSim() {
-    sim = S.createSim(world, { checkpoint: world.camps[run ? 0 : save.camp].hold, taken: run ? {} : save.taken, mods: mods(), tools: tools() });
+    var cp = world.camps[run ? 0 : save.camp].hold, saved = run ? null : world.holds[save.cp];
+    if (saved && saved.type === 'camp') cp = saved.id;          // a bivouac or camp reached since
+    sim = S.createSim(world, { checkpoint: cp, taken: run ? {} : save.taken, mods: mods(), tools: tools() });
     R.snap(sim, mode === 'title' ? 'title' : 'play');
     aim = null; acc = 0; curSet = null; ptr.down = false; ptr.dead = false;
   }
@@ -121,7 +134,7 @@
     dlg.who = l[0];
     $('dlg-who').textContent = l[0]; $('dlg-who').style.display = l[0] ? '' : 'none';
     $('dialogue').classList.toggle('narr', !l[0]);
-    dlg.full = l[1]; dlg.shown = 0; dlg.typing = true;
+    dlg.full = fill(l[1]); dlg.shown = 0; dlg.typing = true;
     $('dlg-text').textContent = ''; $('dlg-next').style.visibility = 'hidden';
   }
   function typeTick(dt) {
@@ -159,7 +172,7 @@
   function arriveCamp(idx) {
     if (sim.p.lastHold === world.camps[idx].hold && save.seen[idx]) return;   // just a hop along the same camp
     var first = !save.seen[idx];
-    save.camp = idx; save.visited[idx] = 1;
+    save.camp = idx; save.cp = world.camps[idx].hold; save.visited[idx] = 1;
     if (idx > save.maxCamp) save.maxCamp = idx;
     applyMods();
     A.sfx('camp');
@@ -222,7 +235,7 @@
   }
 
   function openCamp() {
-    if (run || sim.p.state !== 'hold' || world.holds[sim.p.hold].type !== 'camp') return;
+    if (run || sim.p.state !== 'hold' || world.holds[sim.p.hold].camp == null) return;
     mode = 'camp'; aim = null; ptr.down = false;
     var idx = world.holds[sim.p.hold].camp, c = ST.camps[idx], html, i;
     html = '<span class="purse">&#9670; ' + save.chalk + '</span><h2>' + c.name + '</h2>' +
@@ -255,10 +268,10 @@
       '<button class="btn" data-set="sound">' + soundLabel() + '</button>' +
       '<button class="btn" data-set="fs">' + fsLabel() + '</button>';
     if (run) {
-      panel('<h2>Paused</h2><div class="sub">Daily tower &middot; ' + dateLabel(daily.date) + '</div>' +
+      panel('<h2>Paused</h2><div class="sub">' + (run.kind === 'daily' ? 'Daily tower &middot; ' + dateLabel(daily.date) : 'Endless climb &middot; ' + metres(run.maxY) + ' m') + '</div>' +
         '<button class="btn primary" data-act="resume">Resume</button>' + settings +
-        '<button class="btn" data-act="daily-again">Restart the run</button>' +
-        '<button class="btn" data-act="daily-quit">Quit to title</button>');
+        '<button class="btn" data-act="run-again">Restart the run</button>' +
+        '<button class="btn" data-act="run-quit">Quit to title</button>');
       return;
     }
     panel('<h2>Paused</h2><div class="sub">' + metres(sim.p.y) + ' m &middot; ' + fmtTime(save.time) + ' &middot; ' + save.falls + ' falls</div>' +
@@ -296,15 +309,15 @@
       return;
     }
     if (lift != null) {
-      var k = +lift; save.camp = k; sim.checkpoint = world.camps[k].hold; S.respawn(sim); R.snap(sim, 'play'); curSet = null;
+      var k = +lift; save.camp = k; save.cp = world.camps[k].hold; sim.checkpoint = world.camps[k].hold; S.respawn(sim); R.snap(sim, 'play'); curSet = null;
       persist(); closePanel(); A.sfx('zip'); toast(ST.camps[k].name, 2.5); resume(); return;
     }
     A.sfx('ui');
     if (act === 'resume' || act === 'explore') { closePanel(); resume(); }
-    else if (act === 'tocamp') { sim.checkpoint = world.camps[save.camp].hold; S.respawn(sim); R.snap(sim, 'play'); curSet = null; closePanel(); resume(); }
+    else if (act === 'tocamp') { save.cp = world.camps[save.camp].hold; sim.checkpoint = save.cp; S.respawn(sim); R.snap(sim, 'play'); curSet = null; closePanel(); resume(); }
     else if (act === 'title') { persist(); closePanel(); showTitle(); }
-    else if (act === 'daily-again') { closePanel(); startDaily(); }
-    else if (act === 'daily-quit') { closePanel(); leaveDaily(); }
+    else if (act === 'run-again') { closePanel(); if (run.kind === 'daily') startDaily(); else startEndless(); }
+    else if (act === 'run-quit') { closePanel(); leaveRun(); }
   });
 
   /* ---------- daily tower ---------- */
@@ -312,7 +325,7 @@
     daily = loadDaily();
     world = S.generate(S.dailySeed(daily.date), S.DAILY_PLAN, { noShards: true });
     R.setWorld();
-    run = { started: false, t0: 0, time: 0, rec: [], falls: 0, done: false };
+    run = { kind: 'daily', started: false, t0: 0, time: 0, rec: [], falls: 0, done: false, maxY: 0 };
     hide($('title')); show($('hud')); hide($('chalk')); show($('clock'));
     A.init(); A.setMuted(!save.set.sound); goFullscreen();
     mode = 'play';
@@ -321,7 +334,39 @@
     toast('The clock starts on your first leap.' + (daily.ghost ? ' The ghost is your best run today.' : ''), 5);
     resume();
   }
-  function leaveDaily() {
+  // The endless climb: no summit, three ropes. A fall costs one; every second camp gives one back.
+  function startEndless() {
+    endless = loadEndless();
+    world = S.endlessWorld(4);
+    R.setWorld();
+    run = { kind: 'endless', started: false, t0: 0, time: 0, rec: [], falls: 0, done: false, lives: 3, maxY: 0, camps: 0 };
+    hide($('title')); show($('hud')); hide($('chalk')); show($('clock'));
+    A.init(); A.setMuted(!save.set.sound); goFullscreen();
+    mode = 'play';
+    startSim(); hudCache = {};
+    banner('Endless climb', endless.best ? 'Best ' + endless.best.toLocaleString('en-US') + ' m' : 'No summit'); A.sfx('banner');
+    toast('Three ropes. A fall costs one, and every second camp gives one back.', 6);
+    resume();
+  }
+  function finishEndless() {
+    var h = metres(run.maxY), prev = endless.best, nb = h > prev;
+    run.done = true; endless.runs++;
+    if (nb) endless.best = h;
+    persistEndless();
+    A.sfx('over'); mode = 'end'; aim = null; fade(0);
+    panel('<h2>Out of rope</h2><div class="sub">Endless climb</div>' +
+      '<div class="stats">' +
+      '<div><b>' + h.toLocaleString('en-US') + ' m</b><span>Height</span></div>' +
+      '<div><b>' + endless.best.toLocaleString('en-US') + ' m</b><span>Best</span></div>' +
+      '<div><b>' + run.camps + '</b><span>Camps reached</span></div>' +
+      '<div><b>' + fmtTime(sim.t - run.t0) + '</b><span>Time</span></div></div>' +
+      '<p>' + (nb ? (prev ? 'A new best, ' + (h - prev).toLocaleString('en-US') + ' m higher than before.' : 'Your first mark on the endless wall.')
+                  : 'Your best is still ' + prev.toLocaleString('en-US') + ' m.') + '</p>' +
+      '<p>The endless wall is the same for everyone, so heights can be compared.</p>' +
+      '<button class="btn primary" data-act="run-again">Climb again</button>' +
+      '<button class="btn" data-act="run-quit">Back to title</button>');
+  }
+  function leaveRun() {
     run = null; world = mainWorld; R.setWorld();
     show($('chalk')); hide($('clock'));
     mode = 'title'; startSim(); showTitle();
@@ -346,7 +391,7 @@
       '<button class="btn" data-act="daily-quit">Back to title</button>');
   }
   function ghostAt() {
-    if (!run || !run.started || run.done || !daily.ghost) return null;
+    if (!run || run.kind !== 'daily' || !run.started || run.done || !daily.ghost) return null;
     var g = daily.ghost, gi = (sim.t - run.t0) * 10, i0 = Math.floor(gi), f = gi - i0;
     if (i0 * 2 + 3 >= g.length) return null;
     return { x: g[i0 * 2] + (g[i0 * 2 + 2] - g[i0 * 2]) * f, y: g[i0 * 2 + 1] + (g[i0 * 2 + 3] - g[i0 * 2 + 1]) * f };
@@ -360,7 +405,10 @@
     $('btn-new').textContent = save.started ? 'New climb' : 'Begin the climb';
     $('btn-new').className = 'btn' + (save.started ? '' : ' primary');
     $('btn-new').removeAttribute('data-sure');
-    $('daily-sub').textContent = daily.best ? 'Best today ' + fmtClock(daily.best) : 'A new short tower every day';
+    endless = loadEndless();
+    $('daily-sub').textContent = daily.best ? 'Best today ' + fmtClock(daily.best) : 'New every day';
+    $('endless-sub').textContent = endless.best ? 'Best ' + endless.best.toLocaleString('en-US') + ' m' : 'No summit';
+    $('tag').textContent = 'One tower. ' + fill('{km}') + ' kilometres. One thumb.';
     $('set-aim').textContent = aimLabel(); $('set-sound').textContent = soundLabel(); $('set-fs').textContent = fsLabel();
     show($('title'));
   }
@@ -384,6 +432,7 @@
     enterGame();
   });
   $('btn-daily').addEventListener('click', startDaily);
+  $('btn-endless').addEventListener('click', startEndless);
   $('set-aim').addEventListener('click', function () { toggleSetting('sling'); $('set-aim').textContent = aimLabel(); });
   $('set-sound').addEventListener('click', function () { A.init(); toggleSetting('sound'); $('set-sound').textContent = soundLabel(); });
   $('set-fs').addEventListener('click', function () { toggleSetting('fs'); $('set-fs').textContent = fsLabel(); });
@@ -394,11 +443,12 @@
     if (mode === 'title') return;
     var p = sim.p;
     setText('alt-m', metres(p.y).toLocaleString('en-US'));
-    setText('alt-d', run ? 'Daily tower' : S.DISTRICTS[S.districtAt(world, p.y)].name);
-    if (run) setText('clock-n', fmtClock(run.done ? run.time : run.started ? sim.t - run.t0 : 0));
-    else setText('chalk-n', save.chalk);
+    setText('alt-d', run ? (run.kind === 'daily' ? 'Daily tower' : 'Endless climb') : S.DISTRICTS[S.districtAt(world, p.y)].name);
+    if (!run) setText('chalk-n', save.chalk);
+    else if (run.kind === 'daily') setText('clock-n', fmtClock(run.done ? run.time : run.started ? sim.t - run.t0 : 0));
+    else setText('clock-n', ['', '\u25C6', '\u25C6 \u25C6', '\u25C6 \u25C6 \u25C6'][Math.max(0, run.lives)] || '\u2014');
     setText('piton-n', sim.pitons);
-    var atCamp = !run && p.state === 'hold' && world.holds[p.hold].type === 'camp' && mode === 'play';
+    var atCamp = !run && p.state === 'hold' && world.holds[p.hold].camp != null && mode === 'play';
     if (hudCache.camp !== atCamp) { hudCache.camp = atCamp; $('btn-camp').classList.toggle('hidden', !atCamp); }
     var can = sim.pitons > 0;
     if (hudCache.pit !== can) { hudCache.pit = can; $('btn-piton').disabled = !can; }
@@ -432,17 +482,36 @@
           break;
         case 'camp':
           if (!run) arriveCamp(e.a);
+          else if (run.kind === 'endless') {
+            if (e.a > run.camps) {
+              run.camps = e.a; A.sfx('camp');
+              if (e.a % 2 === 0 && run.lives < 3) { run.lives++; toast('Camp ' + e.a + '. A rope back.', 2.5); }
+              else toast('Camp ' + e.a + '.', 2);
+              if (e.a >= world.camps.length - 3) world.grow(3);      // keep building the wall ahead of the climber
+            }
+          }
           else if (e.a === world.camps.length - 1) finishDaily();
           else if (p.lastHold !== world.camps[e.a].hold) { A.sfx('camp'); toast('Checkpoint ' + e.a + ' of ' + (world.camps.length - 1) + '.', 2); }
           break;
+        case 'biv':
+          if (run || p.lastHold === e.a) break;
+          save.cp = e.a; persist(); A.sfx('camp');
+          if (!hint('biv', true) && now > toastT) toast('Bivouac. Climb saved.', 2);
+          break;
+        case 'spring': A.sfx('spring'); R.pop(e.a, now); R.emit('dust', p.x, p.y - 6, 5); break;
+        case 'tube': A.sfx('tube'); R.emit('puff', p.x, p.y, 8, 0); R.shake(3); break;
+        case 'phaseout': A.sfx('phaseout'); break;
         case 'shard':
           if (run) break;
           save.chalk += e.a; save.got += e.a; dirty = true; A.sfx('shard');
           R.emit('pickup', world.shards[e.b].x, world.shards[e.b].y, 8); hint('shard');
           break;
         case 'fall':
-          if (run) run.falls++;
-          else {
+          if (run) {
+            run.falls++;
+            if (run.kind === 'endless' && --run.lives <= 0) { A.sfx('fall'); vibrate(60); finishEndless(); break; }
+            if (run.kind === 'endless') toast(run.lives === 1 ? 'One rope left.' : run.lives + ' ropes left.', 2.5);
+          } else {
             save.falls++; dirty = true;
             if (p.lastHold >= 0) {
               h = world.holds[p.lastHold];
@@ -478,6 +547,8 @@
       var k = h.type === 'plate' ? (h.elec ? 'eplate' : 'plate') : h.type;
       if (ST.hints[k] && !save.hints[k] && k !== 'grip' && k !== 'camp') { if (hint(k)) return; }
     }
+    if (world.grid.springs[b] && !save.hints.spring && hint('spring')) return;
+    if (world.grid.tubes[b] && !save.hints.tube && hint('tube')) return;
     if (world.grid.vents[b] && !save.hints.vent && hint('vent')) return;
     if (world.grid.winds[b] && !save.hints.wind && hint('wind')) return;
     if (world.grid.drafts[b] && !save.hints.draft && hint('draft')) return;
@@ -579,8 +650,9 @@
       }
       if (n === 14) acc = 0;
       p = sim.p;
+      if (run && p.state === 'hold' && p.y > run.maxY) run.maxY = p.y;
       if (run) {
-        if (run.started && !run.done) {           // record the run at 10 samples a second for the ghost
+        if (run.kind === 'daily' && run.started && !run.done) {           // record the run at 10 samples a second for the ghost
           var need = Math.floor((sim.t - run.t0) * 10);
           while (run.rec.length / 2 <= need && run.rec.length < 12000) run.rec.push(Math.round(p.x), Math.round(p.y));
         }
@@ -614,7 +686,7 @@
 
   // Console helpers for development: Spire.dev.warp(8) jumps to camp 8 with its tools unlocked.
   S.dev = {
-    state: function () { return { sim: sim, save: save, world: world, mode: mode, run: run, daily: daily }; },
+    state: function () { return { sim: sim, save: save, world: world, mode: mode, run: run, daily: daily, endless: endless }; },
     warp: function (i) {
       if (run) return;
       i = S.clamp(i | 0, 0, world.camps.length - 1);

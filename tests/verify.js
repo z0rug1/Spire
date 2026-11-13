@@ -3,7 +3,8 @@
 
    node tests/verify.js               main tower (add -v for a per-leap log)
    node tests/verify.js --daily 365   also check the daily towers for the next 365 dates
-   node tests/verify.js --daily 365 --from 20270101                                       */
+   node tests/verify.js --daily 365 --from 20270101
+   node tests/verify.js --endless 60  also check the first 60 segments of the endless climb */
 'use strict';
 const S = require('../js/core.js');
 const C = S.C;
@@ -54,7 +55,7 @@ function climb(world, opt) {
 
   const ANGLES = []; for (let d = 15; d <= 165; d += 5) ANGLES.push(d * Math.PI / 180);
   const POWERS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-  const WAITS = []; for (let w = 0; w <= 4.6001; w += 0.2) WAITS.push(w);
+  const WAITS = []; for (let w = 0; w <= 6.0001; w += 0.2) WAITS.push(w);
 
   function decide(s) {
     const cur = score(s), h = world.holds[s.p.hold], next = mainHolds[h.main + 1];
@@ -138,7 +139,7 @@ console.log('Main tower: summit reached.');
 console.log(`  tower height : ${Math.round(world.top * C.M_PER_UNIT)} m (${Math.round(world.top)} units), ${world.camps.length} camps`);
 console.log(`  bot          : ${r.leaps} leaps, ${(r.sim.t / 60).toFixed(1)} min of sim time, lowest grip on landing ${r.minLand.toFixed(0)}`);
 console.log('  holds        :', JSON.stringify(count));
-console.log(`  hazards      : ${world.vents.length} vents, ${world.winds.length} wind bands, ${world.drafts.length} updrafts`);
+console.log(`  hazards      : ${world.vents.length} vents, ${world.winds.length} wind bands, ${world.drafts.length} updrafts, ${world.springs.length} bounce caps, ${world.tubes.length} tubes`);
 console.log(`  set pieces   : ${world.sets.map(s => s.type + ' ' + Math.round(s.y0 * C.M_PER_UNIT) + '-' + Math.round(s.y1 * C.M_PER_UNIT) + ' m').join(', ')}`);
 console.log(`  chalk        : ${chalk} across ${world.shards.length} shards`);
 console.log(`  gates (m)    : ${world.gates.map(g => Math.round(g * C.M_PER_UNIT)).join(', ')}`);
@@ -151,15 +152,34 @@ const nDaily = +arg('--daily') || 0;
 if (nDaily) {
   const from = arg('--from');
   const d = from ? new Date(+from.slice(0, 4), +from.slice(4, 6) - 1, +from.slice(6, 8)) : new Date();
-  const t1 = Date.now(), bad = [];
+  const t1 = Date.now(), bad = [], salts = {};
   let leaps = 0, height = 0;
   for (let i = 0; i < nDaily; i++, d.setDate(d.getDate() + 1)) {
     const key = S.dateKey(d);
     const w = S.generate(S.dailySeed(key), S.DAILY_PLAN, { noShards: true });
     const rr = climb(w, { allTools: true, quiet: true });
-    if (!rr.ok) bad.push(key + ': ' + rr.stuck); else { leaps += rr.leaps; height += w.top; }
+    if (rr.ok) { leaps += rr.leaps; height += w.top; continue; }
+    // --salt: look for a salt that gives this date a climbable tower, to paste into DAILY_SALT in js/core.js
+    let fixed = false;
+    if (args.includes('--salt')) for (let salt = 1; salt < 10 && !fixed; salt++) {
+      S.DAILY_SALT[key] = salt;
+      fixed = climb(S.generate(S.dailySeed(key), S.DAILY_PLAN, { noShards: true }), { allTools: true, quiet: true }).ok;
+      if (fixed) salts[key] = salt;
+    }
+    if (!fixed) bad.push(key + ': ' + rr.stuck);
   }
+  if (Object.keys(salts).length) console.log('  salts needed: ' + JSON.stringify(salts));
   const good = nDaily - bad.length;
   console.log(`Daily towers: ${good} of ${nDaily} dates climbable` + (good ? `, average ${Math.round(leaps / good)} leaps and ${Math.round(height / good * C.M_PER_UNIT)} m` : '') + ` (${((Date.now() - t1) / 1000).toFixed(0)} s)`);
   if (bad.length) { bad.forEach(b => console.log('  FAILED ' + b)); process.exit(1); }
+}
+
+/* ---------- endless climb ---------- */
+const nEnd = +arg('--endless') || 0;
+if (nEnd) {
+  const t2 = Date.now();
+  const w = S.endlessWorld(nEnd);
+  const re = climb(w, { allTools: true, quiet: !verbose });
+  if (!re.ok) { console.error(`Endless climb: STUCK at ${re.stuck}`); process.exit(1); }
+  console.log(`Endless climb: first ${nEnd} segments climbable, ${Math.round(w.top * C.M_PER_UNIT)} m, ${re.leaps} leaps (${((Date.now() - t2) / 1000).toFixed(0)} s)`);
 }

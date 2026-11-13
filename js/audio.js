@@ -99,6 +99,10 @@
         case 'buy': tone('sine', 660, 990, 0.16, 0.09); break;
         case 'piton': tone('square', 1500, 1200, 0.03, 0.05); tone('square', 1500, 1200, 0.03, 0.05, 0.11); break;
         case 'text': tone('sine', 520 + Math.random() * 60, 500, 0.025, 0.012); break;
+        case 'spring': tone('sine', 180, 720, 0.22, 0.16); tone('triangle', 360, 1080, 0.18, 0.05, 0.02); break;
+        case 'tube': hiss('bandpass', 300, 2600, 2.5, 0.3, 0.28); tone('sine', 90, 240, 0.28, 0.14); break;
+        case 'phaseout': tone('sine', 880, 220, 0.18, 0.08); break;
+        case 'over': tone('sine', 392, 392, 0.4, 0.09); tone('sine', 311.1, 311.1, 0.5, 0.09, 0.2); tone('sine', 261.6, 261.6, 1.0, 0.1, 0.45); break;
         case 'thunder': hiss('lowpass', 500, 60, 0.4, 1.8, 0.42); tone('sine', 70, 34, 1.4, 0.3, 0.05); break;
         case 'rumble': hiss('lowpass', 160, 90, 0.5, 2.2, 0.5); tone('sawtooth', 52, 40, 2.0, 0.07); break;
         case 'burn': hiss('bandpass', 2400, 500, 0.8, 0.6, 0.3); tone('sine', 300, 60, 0.6, 0.14); break;
