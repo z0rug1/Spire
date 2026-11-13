@@ -17,7 +17,7 @@
     VTERM: 1500,
     ST_MAX: 100, ST_DRAIN: 6, ST_LEAP: 5, ST_REST: 45, ST_GLIDE: 9, ST_GRAPPLE: 6,
     GRAPPLE_R: 250, ZIP_SPEED: 1500,
-    GLIDE_FALL: 80, GLIDE_STEER: 700, GLIDE_VX: 240, UPDRAFT_V: 330,
+    GLIDE_FALL: 80, GLIDE_EASE: 3.2, GLIDE_VX: 240, UPDRAFT_V: 330,
     CRUMBLE_T: 1.1, CRUMBLE_BACK: 3.5,
     SHARD_R: 24,
     M_PER_UNIT: 0.3,   // metres shown per world unit
@@ -35,7 +35,20 @@
     { key: 'crown', name: 'The Crown', nodes: [11, 13], dy: [70, 145], margin: 0.84, restEvery: 3,
       kinds: { leap: 5, plate: 4, eplate: 3, grapple: 2, updraft: 2, vent: 2, moving: 2, crumble: 2 }, intro: 'plate' }
   ];
-  var SEGS = 4; // segments (camp to camp) per district
+  var SEGS = 4; // segments (camp to camp) per district in the main tower
+
+  // A plan is the list of segments a tower is built from. `set` marks a hand-built set piece.
+  var MAIN_PLAN = S.MAIN_PLAN = [];
+  (function () {
+    var sets = { 2: 'dark', 6: 'slag', 10: 'storm', 14: 'alt' };
+    for (var i = 0; i < SEGS * 4; i++) MAIN_PLAN.push({ d: i >> 2, set: sets[i] || null, tutorial: i === 0, intro: i % SEGS === 0 });
+  })();
+  S.DAILY_PLAN = [{ d: 0, n: 7 }, { d: 1, n: 8, intro: true }, { d: 2, n: 8, intro: true }, { d: 3, n: 8, intro: true }];
+  // Daily towers are seeded by the local date. DAILY_SALT lists the few dates whose first seed
+  // produced a gap the test climber could not cross (see tests/verify.js --daily).
+  S.DAILY_SALT = { 20281129: 1 };
+  S.dateKey = function (d) { d = d || new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+  S.dailySeed = function (key) { return (Math.imul(key, 2654435761) + (S.DAILY_SALT[key] || 0) * 7919) >>> 0; };
 
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   S.clamp = clamp;
@@ -62,12 +75,13 @@
   S.holdX = holdX; S.ventOn = ventOn; S.ventWarn = ventWarn; S.plateOn = plateOn; S.plateWarn = plateWarn;
 
   /* ---------- tower generation ---------- */
-  function generate(seed) {
+  function generate(seed, plan, opts) {
+    plan = plan || MAIN_PLAN; opts = opts || {};
     var rnd = rng(seed == null ? C.SEED : seed);
     function R(a, b) { return a + (b - a) * rnd(); }
     function RI(a, b) { return Math.floor(R(a, b + 1)); }
 
-    var W = { holds: [], vents: [], winds: [], drafts: [], shards: [], camps: [], anchors: [], gates: [] };
+    var W = { holds: [], vents: [], winds: [], drafts: [], shards: [], camps: [], anchors: [], gates: [], sets: [], rise: null };
     var mainIdx = 0, seg = 0, dist = 0;
 
     function mk(type, x, y) {
@@ -124,7 +138,7 @@
       }
       return mk(type === 'moving' ? 'grip' : type, clamp(c + (c < 180 ? 64 : -64), 40, 320), t0 + 56);
     }
-    function shard(x, y, v) { W.shards.push({ id: W.shards.length, x: x, y: y, v: v || 1 }); }
+    function shard(x, y, v) { if (!opts.noShards) W.shards.push({ id: W.shards.length, x: x, y: y, v: v || 1 }); }
     function between(a, b) {
       var s = srcPts(a)[0];
       shard((s[0] + cx(b)) / 2, (s[1] + b.y) / 2 + 24, 1);
@@ -168,26 +182,75 @@
     }
 
     var cur = commit({ type: 'camp', x: 180, y: 40, hw: 120, r: 0 });
-    cur.camp = 0; W.camps.push({ hold: cur.id, y: cur.y, d: 0, idx: 0 }); W.gates.push(cur.y);
+    cur.camp = 0; cur.d = plan[0].d;
+    W.camps.push({ hold: cur.id, y: cur.y, d: cur.d, idx: 0 }); W.gates.push(cur.y);
 
-    for (dist = 0; dist < DISTRICTS.length; dist++) {
-      var cfg = DISTRICTS[dist];
-      for (var s = 0; s < SEGS; s++, seg++) {
-        var tutorial = seg === 0;
-        var n = tutorial ? 7 : RI(cfg.nodes[0], cfg.nodes[1]);
+    var sinceRest = 0, count = 0;
+    function advance(h) {
+      cur = commit(h); count++;
+      sinceRest = h.type === 'ledge' ? 0 : sinceRest + 1;
+      return h;
+    }
+    function ledgeAt(x, y, hw) { var h = mk('ledge', x, y); h.hw = hw; h.x = x; return advance(h); }
+    function plateAt(x, y0, H, ph, side) {
+      return advance({ type: 'plate', x: x, hw: 50, y0: y0, y1: y0 + H, y: y0 + H / 2, r: 0,
+                       elec: true, period: 4.4, dur: 1.0, ph: ph, alt: side });
+    }
+
+    for (seg = 0; seg < plan.length; seg++) {
+      var sp = plan[seg];
+      dist = sp.d;
+      var cfg = DISTRICTS[dist], tutorial = !!sp.tutorial, segY0 = cur.y, j, k2, nxt, prev, t0;
+      sinceRest = 0; count = 0;
+
+      if (sp.set === 'slag') {
+        // The Furnace Shaft: grapple up a flooding shaft. Slag rises from the moment you leave the first ledge.
+        var trig = ledgeAt(180, top(cur) + 78, 34);
+        for (j = 0; j < 4; j++) {
+          var sd = j % 2 ? 1 : -1;
+          advance(mk('grip', 180 + sd * R(60, 80), top(cur) + R(84, 92)));
+          var an = mk('anchor', 180 - sd * R(30, 50), cur.y + R(290, 310));
+          shard(an.x, an.y - 70, 1);
+          advance(an);
+          ledgeAt(180 + sd * R(50, 70), cur.y + R(80, 88), 30);
+        }
+        W.rise = { yTrig: trig.y, yEnd: 0, speed: 22, lead: 260 };
+      } else if (sp.set === 'storm') {
+        // The Thermal Ladder: ride three updrafts in a row without landing, twice.
+        for (k2 = 0; k2 < 2; k2++) {
+          var mir = k2 ? -1 : 1;
+          ledgeAt(180 + mir * 34, top(cur) + 78, 30);
+          var xs = [180 - mir * 84, 180 + mir * 84, 180 - mir * 84], wps = [], cy0 = top(cur) - 40, col = null;
+          for (j = 0; j < 3; j++) {
+            col = { id: W.drafts.length, x0: xs[j] - 36, x1: xs[j] + 36, y0: cy0, y1: cy0 + (j ? 440 : 480) };
+            W.drafts.push(col);
+            shard(xs[j], col.y0 + 210, 1); shard(xs[j], col.y0 + 330, 1);
+            wps.push([xs[j], j < 2 ? col.y1 - 70 : 1e9]);
+            cy0 = col.y1 - 200;
+          }
+          var fin = mk('ledge', xs[2], col.y1 - 34); fin.hw = 26; fin.x = xs[2]; fin.viaDraft = true; fin.ladder = wps;
+          advance(fin);
+        }
+      } else if (sp.set === 'alt') {
+        // The Alternator: left and right plates take turns going live.
+        ledgeAt(180, top(cur) + 78, 32);
+        for (k2 = 0; k2 < 2; k2++) {
+          var p1 = plateAt(108, top(cur) + 46, 240, 0, -1);
+          var p2 = plateAt(252, p1.y1 - 70, 240, 2.2, 1);
+          shard(108, p1.y0 + 150, 2); shard(252, p2.y0 + 150, 2);
+          ledgeAt(150, p2.y1 + 52, 30);
+        }
+        plateAt(180, top(cur) + 46, 250, 0, -1);
+      } else {
+        var n = tutorial ? 7 : (sp.n || RI(cfg.nodes[0], cfg.nodes[1]));
         var m = tutorial ? 0.6 : cfg.margin;
         var restEvery = tutorial ? 2 : cfg.restEvery;
         var dyR = tutorial ? [55, 78] : cfg.dy;
-        var sinceRest = 0, count = 0, windLeft = 0;
-        var forced = (s === 0 && cfg.intro) ? cfg.intro : null;
-
-        var advance = function (h) {
-          cur = commit(h); count++;
-          sinceRest = h.type === 'ledge' ? 0 : sinceRest + 1;
-        };
+        var windLeft = 0;
+        var forced = (sp.intro && cfg.intro) ? cfg.intro : null;
 
         while (count < n) {
-          var kind = 'leap', nxt, prev, t0, j;
+          var kind = 'leap';
           if (count === 1 && forced) { kind = forced; forced = null; }
           else if (!tutorial && count > 0) kind = pick(cfg.kinds);
           var needRest = sinceRest >= restEvery;
@@ -219,12 +282,10 @@
               advance(nxt);
             }
           } else if (kind === 'moving') {
-            nxt = place(cur, 'moving', mm, dyR);
-            advance(nxt);
+            advance(place(cur, 'moving', mm, dyR));
           } else if (kind === 'grapple') {
             t0 = top(cur);
-            nxt = mk('anchor', clamp(cx(cur) + R(-90, 90), 50, 310), t0 + R(270, 330));
-            advance(nxt);
+            advance(mk('anchor', clamp(cx(cur) + R(-90, 90), 50, 310), t0 + R(270, 330)));
           } else if (kind === 'updraft') {
             t0 = top(cur);
             var c0 = cx(cur), dir = c0 < 180 ? 1 : -1;
@@ -243,16 +304,18 @@
             advance(nxt); sinceRest++;
           }
         }
-
-        // camp that ends this segment
-        var cy = top(cur) + R(60, 72);
-        var campIdx = W.camps.length;
-        var camp = commit({ type: 'camp', x: 180, y: cy, hw: 120, r: 0 });
-        camp.camp = campIdx; camp.d = Math.min(DISTRICTS.length - 1, Math.floor(campIdx / SEGS));
-        W.camps.push({ hold: camp.id, y: cy, d: camp.d, idx: campIdx });
-        if (campIdx % SEGS === 0 && campIdx / SEGS < DISTRICTS.length) W.gates.push(cy);
-        cur = camp;
       }
+
+      // camp that ends this segment
+      var cy = top(cur) + R(60, 72);
+      var campIdx = W.camps.length, nd = plan[seg + 1] ? plan[seg + 1].d : dist;
+      var camp = commit({ type: 'camp', x: 180, y: cy, hw: 120, r: 0 });
+      camp.camp = campIdx; camp.d = nd; camp.gate = nd !== dist || seg === plan.length - 1;
+      W.camps.push({ hold: camp.id, y: cy, d: nd, idx: campIdx });
+      if (nd !== dist) W.gates.push(cy);
+      if (sp.set) W.sets.push({ type: sp.set, y0: segY0 + 40, y1: cy - 30 });
+      if (sp.set === 'slag') W.rise.yEnd = cy - 70;
+      cur = camp;
     }
     W.top = cur.y;
 
@@ -280,6 +343,10 @@
     for (var i = 1; i < W.gates.length; i++) if (y >= W.gates[i] - 30) d = i;
     return d;
   };
+  S.setAt = function (W, y) {
+    for (var i = 0; i < W.sets.length; i++) if (y >= W.sets[i].y0 && y <= W.sets[i].y1) return W.sets[i];
+    return null;
+  };
   S.toolsFor = function (maxCamp) {
     return { grapple: maxCamp >= SEGS, glider: maxCamp >= SEGS * 2, gloves: maxCamp >= SEGS * 3 };
   };
@@ -293,7 +360,7 @@
       world: world, t: 0, ghost: false, events: [],
       tools: o.tools || { grapple: false, glider: false, gloves: false },
       mods: o.mods || { stMax: C.ST_MAX, vmax: C.VMAX, drain: 1, pitonMax: 2 },
-      crumble: {}, taken: o.taken || {},
+      crumble: {}, taken: o.taken || {}, rise: { on: false, level: -1e9 },
       checkpoint: o.checkpoint != null ? o.checkpoint : world.camps[0].hold,
       pitons: 0, pitonHold: -1,
       p: { x: 0, y: 0, vx: 0, vy: 0, state: 'hold', hold: -1, stamina: C.ST_MAX, lastHold: -1, lastHoldT: -9,
@@ -328,7 +395,7 @@
 
   function respawn(sim) {
     var p = sim.p, h = sim.world.holds[sim.checkpoint];
-    sim.crumble = {};
+    sim.crumble = {}; sim.rise = { on: false, level: -1e9 };
     p.lastHold = -1; p.lastHoldT = -9; p.noGrabT = 0; p.wantGlide = false; p.steer = 0; p.hitT = -9;
     p.stamina = sim.mods.stMax;
     var keepEvents = sim.ghost;
@@ -439,6 +506,20 @@
     sim.t += dt;
     var t = sim.t;
     if (p.state === 'dead') return;
+    var rz = W.rise;
+    if (rz) {                       // the rising slag of the Furnace Shaft
+      var rs = sim.rise;
+      if (!rs.on) {
+        if (p.y > rz.yTrig + 24 && p.y < rz.yEnd) { rs.on = true; rs.level = p.y - rz.lead; ev(sim, 'rise'); }
+      } else {
+        if (rs.level < rz.yEnd) rs.level = Math.min(rz.yEnd, rs.level + rz.speed * dt);
+        if (p.y < rs.level + 4) {
+          p.state = 'dead'; p.deadT = t; p.gliding = false;
+          ev(sim, 'fall', p.x, p.y); ev(sim, 'burn');
+          return;
+        }
+      }
+    }
     var b = W.bucketOf(p.y);
 
     if (p.state === 'hold') {
@@ -497,9 +578,9 @@
       var target = inDraft ? C.UPDRAFT_V : -C.GLIDE_FALL;
       if (p.vy > target) p.vy = Math.max(target, p.vy - C.G * dt);
       else p.vy = Math.min(target, p.vy + (inDraft ? 1500 : 2600) * dt);
-      p.vx += p.steer * C.GLIDE_STEER * dt;
-      if (p.vx > C.GLIDE_VX) p.vx -= (p.vx - C.GLIDE_VX) * Math.min(1, 4 * dt);
-      else if (p.vx < -C.GLIDE_VX) p.vx -= (p.vx + C.GLIDE_VX) * Math.min(1, 4 * dt);
+      // steer sets the sideways speed you are easing toward; with no steer you keep most of your drift
+      if (p.steer !== 0) p.vx += (p.steer * C.GLIDE_VX - p.vx) * Math.min(1, C.GLIDE_EASE * dt);
+      else p.vx -= p.vx * Math.min(1, 0.8 * dt);
       p.stamina = Math.max(0, p.stamina - C.ST_GLIDE * dt);
       if (p.apexY > p.y + 300) p.apexY = p.y + 300;   // a glide breaks the fall
     } else {
@@ -537,7 +618,8 @@
 
   function cloneSim(s) {
     var c = { world: s.world, t: s.t, ghost: true, events: [], tools: s.tools, mods: s.mods, crumble: {},
-              taken: s.taken, checkpoint: s.checkpoint, pitons: s.pitons, pitonHold: s.pitonHold, p: {} }, k;
+              taken: s.taken, checkpoint: s.checkpoint, pitons: s.pitons, pitonHold: s.pitonHold, p: {},
+              rise: { on: s.rise.on, level: s.rise.level } }, k;
     for (k in s.p) c.p[k] = s.p[k];
     for (k in s.crumble) c.crumble[k] = { t0: s.crumble[k].t0, back: s.crumble[k].back };
     return c;

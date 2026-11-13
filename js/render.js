@@ -2,9 +2,9 @@
 (function () {
   'use strict';
   var S = window.Spire, C = S.C;
-  var cv, ctx, dpr = 1, cw = 0, ch = 0, sc = 1, ox = 0, viewH = 640, frameNo = 0;
-  var cam = { y: 200, bottom: 0, shake: 0, sx: 0, sy: 0 };
-  var parts = [], scarf = [], glows = {}, vig = null, vigRed = null, clouds = null;
+  var cv, ctx, dpr = 1, cw = 0, ch = 0, sc = 1, kk = 1, ox = 0, viewH = 640, viewW = 360, frameNo = 0;
+  var cam = { y: 200, bottom: 0, x: 0, z: 1, f: 0.42, shake: 0, sx: 0, sy: 0 };   // z: zoom, x: left edge, f: where the climber sits on screen
+  var parts = [], scarf = [], glows = {}, vig = null, vigRed = null, clouds = null, darkSpr = null, flashA = 0, frameSt = null;
   var ROW = 48, TAU = Math.PI * 2;
 
   var PAL = [
@@ -43,11 +43,12 @@
     cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
     sc = Math.min(cw / C.W, ch / 560);
     ox = (cw - C.W * sc) / 2;
-    viewH = ch / sc;
+    kk = sc * cam.z; viewH = ch / kk; viewW = C.W / cam.z;
     vig = vigRed = null;
   }
-  function toWorld(px, py) { return { x: (px - ox) / sc, y: cam.bottom + (ch - py) / sc }; }
-  function worldT() { ctx.setTransform(dpr * sc, 0, 0, -dpr * sc, dpr * (ox + cam.sx), dpr * (ch + cam.bottom * sc + cam.sy)); }
+  function toWorld(px, py) { return { x: (px - ox) / kk + cam.x, y: cam.bottom + (ch - py) / kk }; }
+  function toScreen(x, y) { return { x: ox + (x - cam.x) * kk, y: ch - (y - cam.bottom) * kk }; }
+  function worldT() { ctx.setTransform(dpr * kk, 0, 0, -dpr * kk, dpr * (ox - cam.x * kk + cam.sx), dpr * (ch + cam.bottom * kk + cam.sy)); }
   function screenT() { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
 
   function glow(col) {
@@ -73,11 +74,27 @@
   function line(x0, y0, x1, y1) { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
 
   /* ---------- camera ---------- */
-  function update(dt, sim, aim) {
-    var p = sim.p, target = p.y + 90 + S.clamp(p.vy * 0.1, -170, 60);
+  function zoomFor(sim, aim, mode) {
+    var p = sim.p;
+    if (mode === 'title') return 1;
+    if (mode === 'talk') return 1.5;                       // close on the camp while people speak
+    if (aim && aim.ok) return 1;                           // pull back to show the whole route while aiming
+    if (p.state === 'dead') return cam.z;
+    if (p.state === 'air' && p.vy < -520) return 1.05;     // and when falling
+    return 1.28;
+  }
+  function update(dt, sim, aim, mode) {
+    var p = sim.p, zt = zoomFor(sim, aim, mode);
+    cam.z += (zt - cam.z) * (1 - Math.exp(-dt * (zt < cam.z ? 7 : 2.4)));
+    cam.f += ((mode === 'talk' ? 0.6 : 0.42) - cam.f) * (1 - Math.exp(-dt * 4));
+    kk = sc * cam.z; viewH = ch / kk; viewW = C.W / cam.z;
+    var target = p.y + 90 / cam.z + S.clamp(p.vy * 0.1, -170, 60);
     if (aim && aim.ok) target += (aim.vy > 0 ? 50 : -40) * aim.power;
     cam.y += (target - cam.y) * (1 - Math.exp(-dt * 5));
-    cam.bottom = Math.max(-240, cam.y - viewH * 0.42);
+    cam.bottom = Math.max(-240, cam.y - viewH * cam.f);
+    var xt = S.clamp(p.x - viewW / 2, 0, C.W - viewW);
+    cam.x = S.clamp(cam.x + (xt - cam.x) * (1 - Math.exp(-dt * 6)), 0, C.W - viewW);
+    if (flashA > 0) flashA = Math.max(0, flashA - dt * 2.2);
     if (cam.shake > 0) {
       cam.shake = Math.max(0, cam.shake - dt * 14);
       cam.sx = (Math.random() - 0.5) * cam.shake * 2; cam.sy = (Math.random() - 0.5) * cam.shake * 2;
@@ -85,8 +102,11 @@
     updateParts(dt, sim);
     updateScarf(dt, sim);
   }
-  function snap(sim) {
-    cam.y = sim.p.y + 90; cam.bottom = Math.max(-240, cam.y - viewH * 0.42);
+  function snap(sim, mode) {
+    if (mode) cam.z = zoomFor(sim, null, mode);
+    kk = sc * cam.z; viewH = ch / kk; viewW = C.W / cam.z;
+    cam.y = sim.p.y + 90 / cam.z; cam.bottom = Math.max(-240, cam.y - viewH * cam.f);
+    cam.x = S.clamp(sim.p.x - viewW / 2, 0, C.W - viewW);
     scarf.length = 0;
   }
 
@@ -314,6 +334,11 @@
       case 'camp': drawCamp(h, P, now); break;
       case 'plate':
         var H = h.y1 - h.y0, on = S.plateOn(h, t), warn = S.plateWarn(h, t);
+        if (h.alt) {            // wired to one of the Alternator's conduits
+          var cxs = h.alt < 0 ? 22 : C.W - 22, ex = h.alt < 0 ? h.x - h.hw : h.x + h.hw;
+          ctx.strokeStyle = '#0a0c16'; ctx.lineWidth = 6; line(cxs, h.y, ex, h.y);
+          ctx.strokeStyle = on ? '#e8fbff' : warn ? '#ffe15a' : '#3b4a78'; ctx.lineWidth = 2.4; line(cxs, h.y, ex, h.y);
+        }
         ctx.fillStyle = '#0a0c16'; ctx.fillRect(h.x - h.hw - 2, h.y0 - 2, h.hw * 2 + 4, H + 4);
         ctx.fillStyle = '#39436a'; ctx.fillRect(h.x - h.hw, h.y0, h.hw * 2, H);
         ctx.fillStyle = '#2f3859';
@@ -341,7 +366,7 @@
     }
   }
   function drawCamp(h, P, now) {
-    var x = h.x, y = h.y, i, gate = h.camp > 0 && h.camp % 4 === 0;
+    var x = h.x, y = h.y, i, gate = h.gate;
     if (gate) {               // district gate: a heavy lintel across the whole face
       ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, y - 40, C.W, 30);
       ctx.fillStyle = P.lo; ctx.fillRect(0, y - 36, C.W, 22);
@@ -363,6 +388,54 @@
     light('#ffcf7a', x + 62, y + 36, 58 + 4 * Math.sin(now * 3 + h.id), 0.75);
     ctx.fillStyle = '#2a2018'; ctx.fillRect(x + 58, y + 29, 8, 14);
     ctx.fillStyle = '#ffe9b0'; ctx.fillRect(x + 59.5, y + 31, 5, 9);
+    // the people who live here
+    var npcs = frameSt && frameSt.npcs ? frameSt.npcs(h.camp) : null;
+    if (npcs) for (i = 0; i < npcs.length; i++)
+      drawNPC(npcs[i], x + npcs[i].x, y + 6, now, frameSt.sim.p.x, frameSt.speaker === npcs[i].who, P);
+  }
+  function drawNPC(n, x, fy, now, px, speaking, P) {
+    var s = n.scale || 1, f = px < x ? -1 : 1, bob = Math.sin(now * 1.7 + x) * 0.5, by = 16 + bob, hy = by + 11, hc = n.hatCol, i;
+    ctx.save(); ctx.translate(x, fy); ctx.scale(s, s); ctx.lineCap = 'round';
+    if (n.prop === 'staff') { ctx.strokeStyle = '#1a1410'; ctx.lineWidth = 3.4; line(f * 9, 0, f * 9, 33); ctx.strokeStyle = '#8a6a44'; ctx.lineWidth = 2; line(f * 9, 0, f * 9, 33); }
+    if (n.prop === 'pike') {
+      ctx.strokeStyle = '#1a1410'; ctx.lineWidth = 3.2; line(f * 9, 0, f * 9, 42); ctx.strokeStyle = '#9aa2a8'; ctx.lineWidth = 1.8; line(f * 9, 0, f * 9, 42);
+      ctx.fillStyle = '#d7dde2'; ctx.beginPath(); ctx.moveTo(f * 9 - 3, 41); ctx.lineTo(f * 9, 50); ctx.lineTo(f * 9 + 3, 41); ctx.fill();
+    }
+    if (n.prop === 'kite') { ctx.fillStyle = '#f4ecd2'; ctx.strokeStyle = 'rgba(90,70,40,.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-f * 4, by + 9); ctx.lineTo(-f * 15, by + 1); ctx.lineTo(-f * 4, by - 7); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    if (n.robe) {
+      ctx.fillStyle = '#16202f'; ctx.beginPath(); ctx.moveTo(-5.8, by + 7.6); ctx.lineTo(5.8, by + 7.6); ctx.lineTo(8.4, 0); ctx.lineTo(-8.4, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = n.coat; ctx.beginPath(); ctx.moveTo(-4.8, by + 6.6); ctx.lineTo(4.8, by + 6.6); ctx.lineTo(7.2, 1); ctx.lineTo(-7.2, 1); ctx.closePath(); ctx.fill();
+    } else {
+      limb(-2.5, by - 6, -3.6, 0, P); limb(2.5, by - 6, 3.6, 0, P);
+      ctx.fillStyle = '#16202f'; rrect(-5.5, by - 7.5, 11, 15, 3.4); ctx.fill();
+      ctx.fillStyle = n.coat; rrect(-4.5, by - 6.5, 9, 13, 3); ctx.fill();
+    }
+    var raise = n.prop === 'staff' || n.prop === 'pike' || n.prop === 'lamp';
+    limb(-f * 4.4, by + 5, -f * 6.6, by - 4, P);
+    limb(f * 4.4, by + 5, f * (raise ? 8.6 : 6.6), by + (raise ? 2 : -4), P);
+    ctx.fillStyle = '#16202f'; circle(0, hy, 5.6);
+    ctx.fillStyle = n.skin || '#e8bf98'; circle(0, hy, 4.6);
+    ctx.fillStyle = '#16202f'; ctx.fillRect(f * 1.6 - 0.6, hy - 0.4, 1.3, 1.5);
+    switch (n.hat) {
+      case 'brim': ctx.fillStyle = hc; oval(0, hy + 3.2, 8.8, 1.9); ctx.beginPath(); ctx.arc(0, hy + 3, 4.7, 0, Math.PI); ctx.fill(); break;
+      case 'hood': ctx.fillStyle = hc; ctx.beginPath(); ctx.arc(0, hy + 0.6, 5.5, -0.12 * Math.PI, 1.12 * Math.PI); ctx.fill(); ctx.fillStyle = n.skin || '#e8bf98'; circle(f * 0.9, hy - 0.4, 3.4); ctx.fillStyle = '#16202f'; ctx.fillRect(f * 2 - 0.6, hy - 0.4, 1.3, 1.5); break;
+      case 'cap': ctx.fillStyle = hc; ctx.beginPath(); ctx.arc(0, hy + 1.4, 4.9, 0, Math.PI); ctx.fill(); ctx.fillRect(f > 0 ? 0 : -7.5, hy + 1.2, 7.5, 1.7); break;
+      case 'helmet': ctx.fillStyle = hc; ctx.beginPath(); ctx.arc(0, hy + 0.8, 5.5, 0, Math.PI); ctx.fill(); ctx.fillRect(-6.4, hy + 0.3, 12.8, 1.7); break;
+      case 'bun': ctx.fillStyle = n.hair; ctx.beginPath(); ctx.arc(0, hy + 1, 4.9, 0, Math.PI); ctx.fill(); circle(0, hy + 6.2, 2.5); break;
+      case 'tall': ctx.fillStyle = hc; ctx.fillRect(-3.8, hy + 3, 7.6, 8.5); oval(0, hy + 3.2, 5.8, 1.5); ctx.fillStyle = '#16202f'; ctx.fillRect(-3.8, hy + 5, 7.6, 1.4); break;
+      default: ctx.fillStyle = n.hair || '#3a2a1c'; ctx.beginPath(); ctx.arc(0, hy + 1, 4.9, 0, Math.PI); ctx.fill();
+    }
+    if (n.prop === 'basket') { ctx.fillStyle = '#3d2b1b'; rrect(-f * 15 - 6, 0, 12, 8.5, 2); ctx.fill(); ctx.fillStyle = '#9a7442'; rrect(-f * 15 - 5, 1, 10, 6.5, 2); ctx.fill(); ctx.fillStyle = '#58e6c0'; circle(-f * 15 - 2, 8, 1.8); circle(-f * 15 + 2, 8.5, 1.6); }
+    if (n.prop === 'rope') { ctx.strokeStyle = '#e0bd76'; ctx.lineWidth = 1.7; ctx.beginPath(); ctx.arc(-f * 3.5, by - 4.5, 3.3, 0, TAU); ctx.stroke(); }
+    if (n.prop === 'ledger') { ctx.fillStyle = '#16202f'; ctx.fillRect(f * 4.6, by - 6.4, 6.4, 8); ctx.fillStyle = '#e4dcc6'; ctx.fillRect(f * 4.6 + 0.8, by - 5.6, 4.8, 6.4); }
+    if (n.prop === 'lamp') { light('#ffcf7a', f * 9, by, 15, 0.8); ctx.fillStyle = '#ffe9b0'; ctx.fillRect(f * 9 - 1.5, by - 1.5, 3, 4); }
+    if (speaking) {
+      ctx.fillStyle = 'rgba(255,255,255,.94)'; rrect(-9, hy + 10, 18, 10, 4.5); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-2.5, hy + 10.5); ctx.lineTo(0, hy + 7.5); ctx.lineTo(2.5, hy + 10.5); ctx.fill();
+      ctx.fillStyle = '#16202f';
+      for (i = -1; i <= 1; i++) circle(i * 4.4, hy + 15 + Math.max(0, Math.sin(now * 9 - i * 1.1)) * 1.6, 1.25);
+    }
+    ctx.restore();
   }
   function drawHolds(Wd, sim, now) {
     var b0 = Wd.bucketOf(cam.bottom - 60), b1 = Wd.bucketOf(cam.bottom + viewH + 60), b, i, list, h, pass;
@@ -538,18 +611,89 @@
     if (!clouds) {
       clouds = [];
       var r = S.rng(77), y;
-      for (y = Wd.gates[2] - 700; y < Wd.top + 500; y += 230 + r() * 160)
+      for (y = (Wd.gates[2] || Wd.top) - 700; y < Wd.top + 500; y += 230 + r() * 160)
         clouds.push({ y: y, off: r() * 600, sp: 6 + r() * 14, sz: 60 + r() * 70 });
     }
     ctx.fillStyle = 'rgba(255,255,255,.12)';
     for (i = 0; i < clouds.length; i++) {
       c = clouds[i];
-      var sy = ch - (c.y - cam.bottom) * 1.25 * sc;
+      var sy = ch - (c.y - cam.bottom) * 1.25 * kk;
       if (sy < -160 || sy > ch + 160) continue;
-      var sx = ox + (((c.off + now * c.sp) % (C.W + 300)) - 150) * sc, z = c.sz * sc;
+      var sx = ox + (((c.off + now * c.sp) % (C.W + 300)) - 150 - cam.x) * kk, z = c.sz * kk;
       oval(sx, sy, z, z * 0.32); oval(sx + z * 0.5, sy - z * 0.12, z * 0.7, z * 0.26); oval(sx - z * 0.55, sy + z * 0.08, z * 0.6, z * 0.22);
     }
   }
+  /* ---------- set pieces ---------- */
+  function setFade(set, y) { return S.clamp(Math.min(y - set.y0, set.y1 - y) / 140, 0, 1); }
+  function drawConduits(Wd, sim) {          // The Alternator: two conduits that take turns going live
+    var i, k, set, t = sim.t;
+    for (i = 0; i < Wd.sets.length; i++) {
+      set = Wd.sets[i];
+      if (set.type !== 'alt' || set.y1 < cam.bottom || set.y0 > cam.bottom + viewH) continue;
+      for (k = -1; k <= 1; k += 2) {
+        var o = { elec: true, period: 4.4, dur: 1.0, ph: k < 0 ? 0 : 2.2 }, on = S.plateOn(o, t), warn = S.plateWarn(o, t), x = k < 0 ? 22 : C.W - 22;
+        ctx.fillStyle = '#0a0c16'; ctx.fillRect(x - 5, set.y0 + 20, 10, set.y1 - set.y0 - 20);
+        ctx.fillStyle = on ? '#e8fbff' : warn ? 'rgba(255,225,90,' + (Math.sin(t * 40) > 0 ? 1 : 0.4) + ')' : '#33416c';
+        ctx.fillRect(x - 1.6, set.y0 + 20, 3.2, set.y1 - set.y0 - 20);
+        if (on) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(127,212,255,.22)'; ctx.fillRect(x - 12, set.y0 + 20, 24, set.y1 - set.y0 - 20); ctx.globalCompositeOperation = 'source-over'; }
+      }
+    }
+  }
+  function drawSlag(L, now, dt) {           // The Furnace Shaft
+    var y0 = cam.bottom - 30, x, g;
+    if (L < y0 - 200) return;
+    ctx.globalCompositeOperation = 'lighter';
+    g = ctx.createLinearGradient(0, L, 0, L + 190); g.addColorStop(0, 'rgba(255,120,30,.42)'); g.addColorStop(1, 'rgba(255,120,30,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, L, C.W, 190);
+    ctx.globalCompositeOperation = 'source-over';
+    if (L < y0) return;
+    g = ctx.createLinearGradient(0, L + 6, 0, L - 320);
+    g.addColorStop(0, '#fff0a0'); g.addColorStop(0.04, '#ffb43a'); g.addColorStop(0.18, '#f0601a'); g.addColorStop(0.6, '#a81f0a'); g.addColorStop(1, '#4a0a04');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, y0);
+    for (x = 0; x <= C.W; x += 12) ctx.lineTo(x, L + Math.sin(x * 0.05 + now * 2) * 3 + Math.sin(x * 0.11 - now * 3.1) * 2);
+    ctx.lineTo(C.W, y0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(60,10,4,.55)';
+    for (x = 0; x < 5; x++) oval((hsh(x, 3) * 420 + now * (8 + x * 3)) % 420 - 30, L - 14 - hsh(x, 5) * 40, 16 + hsh(x, 7) * 14, 3.5);
+    if (dt > 0 && Math.random() < 0.5) add(Math.random() * C.W, L + 2, (Math.random() - 0.5) * 40, 60 + Math.random() * 120, -160, 0.9, 1.6, '#ffb24a', true);
+  }
+  function drawDark(Wd, sim, a) {           // The Blackout: only a pool of light around you, and fungus on the holds
+    if (!darkSpr) {
+      darkSpr = document.createElement('canvas'); darkSpr.width = darkSpr.height = 512;
+      var c = darkSpr.getContext('2d'), g = c.createRadialGradient(256, 256, 0, 256, 256, 256);
+      g.addColorStop(0, 'rgba(2,6,5,0)'); g.addColorStop(0.13, 'rgba(2,6,5,0)'); g.addColorStop(0.34, 'rgba(2,6,5,.93)'); g.addColorStop(1, 'rgba(2,6,5,.93)');
+      c.fillStyle = g; c.fillRect(0, 0, 512, 512);
+    }
+    var ps = toScreen(sim.p.x, sim.p.y + 6), D = 2.7 * Math.max(cw, ch), b, i, list, h;
+    screenT(); ctx.globalAlpha = a; ctx.drawImage(darkSpr, ps.x - D / 2, ps.y - D / 2, D, D); ctx.globalAlpha = 1;
+    worldT();
+    for (b = Wd.bucketOf(cam.bottom); b <= Wd.bucketOf(cam.bottom + viewH); b++) {
+      list = Wd.grid.holds[b]; if (!list) continue;
+      for (i = 0; i < list.length; i++) {
+        h = Wd.holds[list[i]];
+        if (h.type === 'plate' || h._g === frameNo) continue; h._g = frameNo;
+        light('#58e6c0', S.holdX(h, sim.t), h.y, h.type === 'camp' ? 0 : 17, 0.55 * a);
+        if (h.type !== 'camp') { ctx.fillStyle = 'rgba(143,245,216,' + 0.75 * a + ')'; circle(S.holdX(h, sim.t) + 9, h.y - 9, 1.6); circle(S.holdX(h, sim.t) - 10, h.y - 6, 1.2); }
+      }
+    }
+  }
+  function drawStorm(a, now) {              // The Thermal Ladder
+    var k, x, y;
+    ctx.fillStyle = 'rgba(16,26,48,' + 0.34 * a + ')'; ctx.fillRect(0, 0, cw, ch);
+    ctx.strokeStyle = 'rgba(205,225,255,' + 0.42 * a + ')'; ctx.lineWidth = 1.3; ctx.lineCap = 'round';
+    for (k = 0; k < 70; k++) {
+      y = (hsh(k, 2) * ch + now * (820 + hsh(k, 3) * 420)) % (ch + 40) - 20;
+      x = ((hsh(k, 1) * (cw + 200) - now * 210) % (cw + 200) + cw + 200) % (cw + 200) - 100;
+      line(x, y, x - 7, y + 24);
+    }
+    if (flashA > 0) { ctx.fillStyle = 'rgba(235,242,255,' + 0.6 * flashA * a + ')'; ctx.fillRect(0, 0, cw, ch); }
+  }
+  function drawGhost(g, now) {              // your best run today
+    ctx.globalAlpha = 0.4; ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    rrect(g.x - 4.5, g.y - 6.5, 9, 13, 3); ctx.fill(); circle(g.x, g.y + 10.5, 4.6);
+    line(g.x, g.y + 6, g.x - 9, g.y + 3 + Math.sin(now * 6) * 2);
+    ctx.globalAlpha = 1;
+  }
+
   function overlay() {
     if (!vig) {
       vig = document.createElement('canvas'); vig.width = vig.height = 256;
@@ -565,6 +709,8 @@
 
   function frame(st) {
     var Wd = st.world, sim = st.sim, d = S.districtAt(Wd, cam.y), P = PAL[d], wide = ox > 1, g;
+    var set = S.setAt(Wd, sim.p.y), sa = set ? setFade(set, sim.p.y) : 0;
+    frameSt = st;
     screenT();
     if (wide) {
       g = ctx.createLinearGradient(0, 0, 0, ch); g.addColorStop(0, P.sky[0]); g.addColorStop(1, P.sky[1]);
@@ -576,14 +722,23 @@
     drawWall(Wd, st.now);
     drawZones(Wd, sim.t, st.now);
     drawMarks(st.marks);
+    drawConduits(Wd, sim);
     drawHolds(Wd, sim, st.now);
     drawVents(Wd, sim, st.dt);
     drawShards(Wd, sim, st.now);
+    if (Wd.rise && sim.rise.on) drawSlag(sim.rise.level, st.now, st.dt);
+    if (st.ghost) drawGhost(st.ghost, st.now);
     drawPlayer(sim, st, PAL[S.districtAt(Wd, sim.p.y)]);
     drawParts();
+    if (set && set.type === 'dark' && sa > 0.01) drawDark(Wd, sim, sa);
     if (st.aim && st.aim.ok) drawAim(sim, st.aim, PAL[S.districtAt(Wd, sim.p.y)], st.now);
     screenT();
     drawClouds(Wd, st.now);
+    if (set && set.type === 'storm' && sa > 0.01) drawStorm(sa, st.now);
+    if (Wd.rise && sim.rise.on) {           // heat on your heels
+      var heat = S.clamp(1 - (sim.p.y - sim.rise.level) / 520, 0, 1);
+      if (heat > 0) { ctx.fillStyle = 'rgba(255,90,20,' + 0.22 * heat + ')'; ctx.fillRect(0, 0, cw, ch); }
+    }
     // depth haze: the drop below you
     g = ctx.createLinearGradient(0, ch, 0, ch * 0.62);
     g.addColorStop(0, 'rgba(' + P.fog + ',.62)'); g.addColorStop(1, 'rgba(' + P.fog + ',0)');
@@ -600,11 +755,22 @@
       ctx.globalAlpha = (1 - fr / 0.3) * (0.45 + 0.35 * Math.sin(st.now * 9));
       ctx.drawImage(vigRed, 0, 0, cw, ch); ctx.globalAlpha = 1;
     }
+    if (st.stick) {             // glide steering: a rail under your finger, the knob shows how hard you are steering
+      var kx = S.clamp(st.stick.x - st.stick.sx, -st.stick.max, st.stick.max);
+      ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 7; line(st.stick.sx - st.stick.max, st.stick.sy, st.stick.sx + st.stick.max, st.stick.sy);
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 3; line(st.stick.sx - st.stick.max, st.stick.sy, st.stick.sx + st.stick.max, st.stick.sy);
+      ctx.fillStyle = 'rgba(255,255,255,.3)'; circle(st.stick.sx, st.stick.sy, 5);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; circle(st.stick.sx + kx, st.stick.sy, 15);
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; circle(st.stick.sx + kx, st.stick.sy, 12);
+    }
   }
 
   S.Render = {
-    init: init, resize: resize, frame: frame, update: update, snap: snap, toWorld: toWorld, emit: emit,
+    init: init, resize: resize, frame: frame, update: update, snap: snap, toWorld: toWorld, toScreen: toScreen, emit: emit,
     shake: function (a) { cam.shake = Math.max(cam.shake, a); },
-    scale: function () { return sc; }, cam: cam
+    flash: function () { flashA = 1; },
+    setWorld: function () { clouds = null; parts.length = 0; },
+    scale: function () { return sc; },      // base scale (zoom 1): drag distances are measured in this
+    cam: cam
   };
 })();

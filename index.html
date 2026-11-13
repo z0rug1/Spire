@@ -21,10 +21,12 @@
     <div id="alt"><span id="alt-m">0</span><span class="unit"> m</span><small id="alt-d">The Roots</small></div>
     <div id="hud-right">
       <span id="chalk" title="Chalk">&#9670; <b id="chalk-n">0</b></span>
+      <span id="clock" class="hidden" title="Run time"><b id="clock-n">0:00.0</b></span>
       <button id="btn-pause" class="round" aria-label="Pause"><i></i><i></i></button>
     </div>
   </div>
   <div id="toast" role="status"></div>
+  <div id="banner"></div>
   <div id="hud-bottom">
     <button id="btn-piton" class="pill" aria-label="Place piton">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20 L13 5 L16 7 Z" fill="currentColor"/><circle cx="17" cy="5" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
@@ -48,9 +50,10 @@
 <div id="title" class="overlay">
   <div class="title-box">
     <h1>SPIRE</h1>
-    <p class="tag">One tower. Nearly eight kilometres. One thumb.</p>
+    <p class="tag">One tower. Seven kilometres. One thumb.</p>
     <button id="btn-continue" class="btn primary hidden">Continue</button>
     <button id="btn-new" class="btn primary">Begin the climb</button>
+    <button id="btn-daily" class="btn">Daily tower<small id="daily-sub"></small></button>
     <div class="toggles">
       <button id="set-aim" class="chip"></button>
       <button id="set-sound" class="chip"></button>

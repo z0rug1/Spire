@@ -5,26 +5,26 @@
 
   // who: '' = narration
   var camps = [
-    { name: "Sedge's Farm", lines: [
+    { name: "Sedge's Farm", npcs: [{ who: 'Sedge', x: 34, coat: '#7d8a52', skin: '#d9a67c', hat: 'brim', hatCol: '#4a4030', prop: 'staff', robe: true }], lines: [
       ['Sedge', 'The drip-lines ran dry again this morning. Third time this month.'],
       ['Sedge', 'Water falls from the Crown. Always has. So does the word of the Crown, only nobody down here has heard that word since before I was born.'],
       ['Sedge', "You're the best courier in the Roots. Take our petition up. All the way up. Put it in the Crown's own hands."],
-      ['', 'Nearly eight kilometres of wall. Nobody from the Roots has ever climbed past the Works.']
+      ['', 'More than seven kilometres of wall. Nobody from the Roots has ever climbed past the Works.']
     ] },
-    { name: 'Drip Market', lines: [
+    { name: 'Drip Market', npcs: [{ who: 'Moss-seller', x: 32, coat: '#5f7f6a', hat: 'hood', hatCol: '#3c5a4a', prop: 'basket' }], lines: [
       ['Moss-seller', 'A courier, heading up? Then keep an eye out for chalk. Climbers before you left it on the hard routes.'],
       ['Moss-seller', 'Bring it to any camp. The riggers will trade you better lungs and better legs for it.']
     ] },
-    { name: 'The Long Ladder', lines: [
+    { name: 'The Long Ladder', npcs: [{ who: 'Hask', x: 32, coat: '#8a6f55', skin: '#c99672', hat: 'cap', hatCol: '#5a4636', prop: 'rope' }], lines: [
       ['Hask', 'See these? Pitons. Hammer one into a hold and the wall remembers you. Fall, and you wake up there instead of all the way down at camp.'],
       ['Hask', 'I got as far as the Works gate once. They turned me back. Said the Crown had ordered the Roots to stay put.'],
       ['Hask', 'Funny thing. Nobody I asked had ever seen that order.']
     ] },
-    { name: 'Lamp Row', lines: [
+    { name: 'Lamp Row', npcs: [{ who: 'Nib', x: 30, coat: '#b9843f', hair: '#3a2a1c', prop: 'lamp', scale: 0.72 }], lines: [
       ['Nib', 'Are you going to see the Crown? Ask them why the lamps flicker.'],
       ['', 'Above you the brick gives way to iron. The air starts to taste of smoke.']
     ] },
-    { name: 'Works Gate', unlock: 'grapple', lines: [
+    { name: 'Works Gate', npcs: [{ who: 'Warden Ost', x: 34, coat: '#6b4a3a', skin: '#c99672', hat: 'helmet', hatCol: '#c9a23a', prop: 'pike' }, { who: 'Tallow', x: 100, coat: '#c9772f', hat: 'cap', hatCol: '#3a3a3a', prop: 'rope' }], unlock: 'grapple', lines: [
       ['Warden Ost', 'Halt. Roots traffic ends here. Crown order.'],
       ['', 'A family is camped against the gate. Their water ran out two days ago. You have one full skin for the climb.']
     ], choice: { id: 'water', options: [
@@ -37,15 +37,15 @@
       ['Tallow', "Courier! Up here. Name's Tallow, I rig the lines. You climb like you mean it."],
       ['Tallow', "Take my spare line. Tap one of the rings and it hauls you in, if you're close enough. If you aren't, jump first."]
     ] },
-    { name: 'Slag Shelf', lines: [
+    { name: 'Slag Shelf', npcs: [{ who: 'Furnace-hand', x: 32, coat: '#7a3f2c', skin: '#d9a67c', hat: 'helmet', hatCol: '#8d9499', prop: 'staff' }], lines: [
       ['Furnace-hand', "Water comes down from the Gardens. We cool the furnaces with it, and what's left goes to the Roots. That's the ration. Crown order."],
       ['Furnace-hand', "No, I've never seen the order. The Quartermaster has."]
     ] },
-    { name: "Tallow's Rig", lines: [
+    { name: "Tallow's Rig", npcs: [{ who: 'Tallow', x: 32, coat: '#c9772f', hat: 'cap', hatCol: '#3a3a3a', prop: 'rope' }], lines: [
       ['Tallow', 'Steam is getting worse. The vents fire whenever they like now. Nobody has sent a repair order in years.'],
       ['Tallow', "If you make it to the top, ask whoever's up there whether they still remember we exist."]
     ] },
-    { name: 'The Ration Hall', lines: [
+    { name: 'The Ration Hall', npcs: [{ who: 'Quartermaster Marrow', x: 34, coat: '#4a4f6a', hat: 'bun', hair: '#c4c4c4', prop: 'ledger', robe: true }], lines: [
       ['Quartermaster Marrow', "So you're the one climbing my walls."],
       ['Quartermaster Marrow', 'The Crown sets the ration. I only keep the ledger. Here: a sealed copy. Carry it up to the Gardens for me and the guild will owe you.'],
       ['', "Behind her is the ration valve. One turn would send the Works' share down to the Roots."]
@@ -57,21 +57,21 @@
         ['', 'The wheel shrieks. Far below, pipes that have been dry for a month begin to knock.'],
         ['', 'Then the alarm starts. You climb fast.'] ] }
     ] } },
-    { name: 'Garden Stair', unlock: 'glider', lines: [
+    { name: 'Garden Stair', npcs: [{ who: 'Pim', x: 30, coat: '#6fae5a', hair: '#c9772f', prop: 'kite', scale: 0.85 }], unlock: 'glider', lines: [
       ['', 'The smoke ends as if cut with a knife. White stone. Clean air. Leaves.'],
       ['Pim', 'You came up the outside? Nobody comes up the outside.'],
       ['Pim', "The wind is strange here. In places it rises along the wall. I made this out of seed-silk. Hold on to it in the air and it'll carry you."],
       ['Pim', "Don't tell the Curator. We're not supposed to help anyone from below. Crown order."]
     ] },
-    { name: 'Ivy Terrace', lines: [
+    { name: 'Ivy Terrace', npcs: [{ who: 'Keeper', x: 32, coat: '#e9e3d2', skin: '#c99672', hat: 'brim', hatCol: '#c9b98a', prop: 'basket', robe: true }], lines: [
       ['Keeper', 'Water? We have plenty. It rains up here, inside the walls. The Crown provides.'],
       ['Keeper', "Below? I'm told they have what they need. The Curator reads us the Crown's letters every season."]
     ] },
-    { name: 'The Glasshouse', lines: [
+    { name: 'The Glasshouse', npcs: [{ who: 'Pim', x: 30, coat: '#6fae5a', hair: '#c9772f', prop: 'kite', scale: 0.85 }], lines: [
       ['Pim', 'I found something in the old conservatory. Crown letters. Hundreds of them. Blank, and already sealed.'],
       ['Pim', "Why would anyone seal a letter before it's written?"]
     ] },
-    { name: "Curator's Balcony", lines: [
+    { name: "Curator's Balcony", npcs: [{ who: 'Curator Vane', x: 34, coat: '#7a2f4a', hat: 'tall', hatCol: '#d9b85a', prop: 'ledger', robe: true }], lines: [
       ['Curator Vane', 'A courier from the Roots. How determined.'],
       ['Curator Vane', 'The Crown is not to be disturbed. But I am not unkind. Leave your petition with me, and take this seal. It opens doors. A comfortable post is yours when you come back down.']
     ], choice: { id: 'seal', options: [
@@ -95,7 +95,7 @@
       ['', "The Crown's letters were never sent from the Crown."]
     ] },
     { name: 'Last Light', lines: [
-      ['', 'The air is thin. Below you, nearly eight kilometres of lamps: the Gardens, the Works, the Roots, all still waiting for word.'],
+      ['', 'The air is thin. Below you, more than seven kilometres of lamps: the Gardens, the Works, the Roots, all still waiting for word.'],
       ['', 'One more wall.']
     ] },
     { name: 'The Crown Chamber', lines: [
@@ -117,11 +117,19 @@
     anchor: "Tap a ring to grapple to it. Out of reach? Leap, then tap mid-air.",
     slick: 'Wet holds drain your grip much faster.',
     wind: 'Wind bends your leap. The dotted arc already accounts for it.',
-    draft: 'Hold a finger down mid-air to glide. Updrafts lift you while you glide.',
+    draft: 'Hold a finger down mid-air to glide, and slide it left or right to steer. Updrafts lift you.',
     plate: 'Magnet gloves catch a steel plate at the top of your leap. Hop upward.',
     eplate: 'A flickering plate is about to go live. Be off it in time.',
     piton: 'Tap the piton button on a hold to set a checkpoint there.',
     camp: 'Camp reached. Your climb is saved here.'
+  };
+
+  // Hand-built set pieces, one per district.
+  var sets = {
+    dark: { name: 'The Blackout', hint: 'The lamps are out. Fungus marks the holds, and the dotted arc still shows your leap.' },
+    slag: { name: 'The Furnace Shaft', hint: 'Once you leave this ledge the shaft floods with slag. Keep climbing.' },
+    storm: { name: 'The Thermal Ladder', hint: 'Ride each updraft to its top, then glide across to the next. There is nowhere to land in between.' },
+    alt: { name: 'The Alternator', hint: 'Left and right plates take turns going live. Cross when the next one goes dark.' }
   };
 
   var upgrades = [
@@ -166,6 +174,6 @@
     return out;
   }
 
-  S.Story = { camps: camps, hints: hints, upgrades: upgrades, endings: endings, epilogue: epilogue };
+  S.Story = { camps: camps, hints: hints, sets: sets, upgrades: upgrades, endings: endings, epilogue: epilogue };
   if (typeof module !== 'undefined' && module.exports) module.exports = S;
 })(typeof window !== 'undefined' ? window : globalThis);
