@@ -46,22 +46,25 @@
   // The districts from the bottom of the tower to the top, and each district's place in that order.
   var ORDER = S.ORDER = [0, 4, 1, 2, 5, 3];
   S.RANK = []; ORDER.forEach(function (d, i) { S.RANK[d] = i; });
-  var SEGS = 4; // segments (camp to camp) per district in the main tower
+  var SEGS = 8; // segments (camp to camp) per district in the main tower
 
   // A plan is the list of segments a tower is built from. `set` marks a hand-built set piece;
   // `parts: 2` splits the segment in two with a bivouac (an unnamed checkpoint) in the middle.
+  var PARTS = 7;  // stretches between two camps (eight after every other camp), with a bivouac between each
   var MAIN_PLAN = S.MAIN_PLAN = [];
   (function () {
     var sets = { 0: 'dark', 4: 'sluice', 1: 'slag', 2: 'storm', 5: 'stacks', 3: 'alt' };
     for (var i = 0; i < SEGS * ORDER.length; i++) {
       var d = ORDER[Math.floor(i / SEGS)], k = i % SEGS;
-      MAIN_PLAN.push({ d: d, set: k === 2 ? sets[d] : null, tutorial: i === 0, intro: k === 0, parts: 3 });
+      MAIN_PLAN.push({ d: d, set: k === 4 ? sets[d] : null, tutorial: i === 0, intro: k === 0, parts: PARTS + (k % 2) });
     }
     MAIN_PLAN[MAIN_PLAN.length - 1].set = 'finale';
   })();
   // New Game+: the same story on a remixed tower, a little harder each time round.
   // Only five remixes are generated (and checked by tests/verify.js --ng 5); later rounds cycle through them.
-  S.ngSeed = function (lv) { return lv ? C.SEED + 7919 * ((lv - 1) % 5 + 1) : C.SEED; };
+  // NG_SALT picks another remix for a round whose first one the test climber could not finish.
+  S.NG_SALT = { 2: 1 };
+  S.ngSeed = function (lv) { if (!lv) return C.SEED; var r = (lv - 1) % 5 + 1; return (C.SEED + 7919 * r + (S.NG_SALT[r] || 0) * 104729) >>> 0; };
   S.ngPlan = function (lv) {
     if (!lv) return MAIN_PLAN;
     return MAIN_PLAN.map(function (sp) { var o = {}, k; for (k in sp) o[k] = sp[k]; o.hard = Math.min(1, 0.4 + 0.2 * lv); o.tutorial = false; return o; });
@@ -247,6 +250,18 @@
       if (Math.abs(m.x - x) > 34 + (hw || 0)) return false;
       return m.kind === 'drip' ? (y < m.y + 14 && y > m.y - m.fall - 12) : Math.abs(m.y - y) < m.amp + 22;
     }
+    // Is the whole circle a wheel sweeps clear of recent vents and moving hazards?
+    function wheelClear(wx, cy, rad) {
+      var i, m;
+      for (i = Math.max(0, W.vents.length - 4); i < W.vents.length; i++) if (Math.abs(W.vents[i].y - cy) < rad + 34) return false;
+      for (i = Math.max(0, W.mobs.length - 4); i < W.mobs.length; i++) {
+        m = W.mobs[i];
+        if (m.kind === 'bird' && Math.abs(m.y - cy) < rad + 34) return false;
+        if (m.kind === 'drip' && Math.abs(m.x - wx) < rad + 24 && m.y > cy - rad - 24 && m.y - m.fall < cy + rad + 24) return false;
+        if (m.kind === 'drone' && Math.abs(m.x - wx) < rad + 24 && Math.abs(m.y - cy) < m.amp + rad + 24) return false;
+      }
+      return true;
+    }
     function mobNear(x, y, hw) {
       for (var i = Math.max(0, W.mobs.length - 3); i < W.mobs.length; i++) if (mobHits(W.mobs[i], x, y, hw)) return true;
       return false;
@@ -268,6 +283,11 @@
       }
       for (i = Math.max(0, W.holds.length - 12); i < W.holds.length; i++) {
         var h = W.holds[i];
+        if (h.type === 'wheel') {
+          if (m.kind === 'bird' ? Math.abs(m.y - h.cy0) < h.rad + 34 : Math.abs(m.x - h.cx0) < h.rad + 24 &&
+              (m.kind === 'drip' ? m.y > h.cy0 - h.rad - 24 && m.y - m.fall < h.cy0 + h.rad + 24 : Math.abs(m.y - h.cy0) < m.amp + h.rad + 24)) return;
+          continue;
+        }
         if (h.type === 'plate' || h.type === 'camp') { if (h.type === 'camp' && Math.abs(h.y - my) < 110) return; continue; }
         if (h !== a && h !== b && mobHits(m, cx(h), hy(h), h.hw)) return;
       }
@@ -295,6 +315,7 @@
       var x0 = side < 0 ? 0 : C.W - len, x1 = side < 0 ? len : C.W;
       for (i = Math.max(0, W.holds.length - 8); i < W.holds.length; i++) {
         var h = W.holds[i];
+        if (h.type === 'wheel' && Math.abs(h.cy0 - y) < h.rad + 34) return;
         if (h.type !== 'plate' && Math.abs(h.y - y) < 28 && h.x > x0 - 20 && h.x < x1 + 20) return;
       }
       W.vents.push({ id: W.vents.length, side: side, y: y, x0: x0, x1: x1, period: R(2.6, 3.2), dur: 0.9, ph: R(0, 3) });
@@ -303,7 +324,7 @@
     // of the old colour, with chalk on it, is solid until you pull the lever.
     function switchRun(m, dyR) {
       var sw = place(cur, 'switch', m, dyR), j, k = 2 + (rnd() < 0.5 ? 1 : 0), prev = cur, t0;
-      gsw ^= 1;
+      gsw ^= 1; sw.to = gsw;
       advance(sw);
       t0 = top(prev);
       var dc = mk('gate', clamp(cx(prev) + (cx(sw) > cx(prev) ? -1 : 1) * R(70, 110), 40, 320), t0 + R(50, 95));
@@ -367,7 +388,8 @@
         if ((cur.type === 'phase' || cur.type === 'crumble' || cur.type === 'timed') && kind !== 'spring' && kind !== 'tube') kind = 'leap';
         if ((kind === 'wheel' || kind === 'bell') && (needRest || noWait(cur) || windLeft > 0)) kind = 'leap';
         // a lift has to be waited for, so never hang it after a hold you cannot wait on
-        if (kind === 'lift' && noWait(cur)) kind = 'leap';
+        // anything that has to be timed never follows a hold you cannot wait on
+        if ((kind === 'lift' || kind === 'vent' || kind === 'phase' || kind === 'moving') && noWait(cur)) kind = 'leap';
         var mm = m;
         if (windLeft > 0) { mm = m - 0.1; windLeft--; }
 
@@ -405,7 +427,7 @@
           t0 = top(cur); c1 = cx(cur);
           var rw = R(62, 78), wx = clamp(c1 + (c1 < 180 ? 1 : -1) * R(50, 100), rw + 26, C.W - rw - 26), wby = t0 + R(26, 56);
           var wh = { type: 'wheel', cx0: wx, cy0: wby + rw, rad: rw, w: 6.283 / R(8, 9.5), ph: R(0, 6.28), k: 0, r: 13, x: wx, y: wby + rw };
-          if (!reach(cur, wh, Math.min(0.9, mm + 0.06)) || mobNear(wx, wby + rw) || nearVent(wby + rw)) advance(place(cur, 'grip', mm, dyR));
+          if (!reach(cur, wh, Math.min(0.9, mm + 0.06)) || !wheelClear(wx, wby + rw, rw)) advance(place(cur, 'grip', mm, dyR));
           else {
             advance(wh);
             for (j = 1; j < 4; j++) { var sk = {}, kk; for (kk in wh) sk[kk] = wh[kk]; sk.k = j; commit(sk, true); sk.main = wh.main; }
@@ -506,7 +528,7 @@
         var side0 = rnd() < 0.5 ? -1 : 1;
         for (k2 = 0; k2 < 4; k2++) {
           var sx = 180 + side0 * (k2 % 2 ? -1 : 1) * R(18, 34), lever = mk('switch', sx, top(cur) + R(70, 84));
-          gsw ^= 1; advance(lever);
+          gsw ^= 1; lever.to = gsw; advance(lever);
           for (j = 0; j < 2; j++) {
             var lx = 180 + (gsw ? 1 : -1) * R(78, 96), ly = cur.y + R(78, 92);
             var gt = mk('gate', lx, ly); advance(gt);
@@ -526,7 +548,7 @@
           sh.x0 = clamp(sh.x0, 40, 320); sh.x = sh.x0 + sh.ax / 2; sh.y = sh.y0 + sh.ay / 2;
           advance(sh);
           var lv = mk('switch', clamp(sh.x0 + sh.ax - dir2 * R(70, 90), 40, 320), sh.y0 + sh.ay + R(40, 60));
-          gsw ^= 1; advance(lv);
+          gsw ^= 1; lv.to = gsw; advance(lv);
           for (j = 0; j < 2; j++) {
             var px2 = clamp(cx(cur) + (j ? -1 : 1) * dir2 * R(70, 100), 40, 320), g2 = mk('gate', px2, top(cur) + R(72, 90));
             advance(g2);
@@ -695,7 +717,8 @@
     } else { p.x = holdX(h, sim.t); p.y = holdY(h, sim.t); }
     p.apexY = p.y;
     if (h.type === 'crumble') sim.crumble[h.id] = { t0: sim.t, back: 0 };
-    if (h.type === 'switch' && !sim.respawning) { sim.sw ^= 1; ev(sim, 'switch', h.id); }
+    // a lever sets the sluices to its own colour, so grabbing it again after a fall changes nothing
+    if (h.type === 'switch' && !sim.respawning) { var to = h.to != null ? h.to : sim.sw ^ 1; if (to !== sim.sw) { sim.sw = to; ev(sim, 'switch', h.id); } }
     if (h.box != null && !sim.ghost && !sim.respawning && !sim.lore.boxes[h.box]) {
       if (sim.lore.held > 0) { sim.lore.held--; sim.lore.boxes[h.box] = 1; sim.lore.letters[h.box] = 1; ev(sim, 'box', h.box); }
       else ev(sim, 'locked', h.box);

@@ -15,10 +15,11 @@ Plain HTML, CSS and JavaScript: no build step, no dependencies, no image or audi
 
 ## Ways to climb
 
-- **The story.** You are a courier from the Roots, the lowest floors of a tower about thirty-five kilometres
+- **The story.** You are a courier from the Roots, the lowest floors of a tower about 175 kilometres
   tall. The water that flows down from the Crown is failing, and nobody has heard from the Crown in
   a generation. Six districts (the Roots, the Cisterns, the Works, the Gardens, the Archive and the
-  Crown), 25 camps with the people who live there, two bivouacs between every pair of camps, three
+  Crown), 49 camps (25 with the people who live there, 24 quiet waystations between them), six or
+  seven bivouacs between every pair of camps, three
   faction choices and
   three endings, one of them hidden. Camps sell upgrades for the chalk you collect, and a tailor
   sells scarves, glider skins and trails.
@@ -136,13 +137,14 @@ node tests/verify.js --ng 5                    # plus the five New Game+ remixes
 
 Towers are generated from seeds, so everyone climbs the same walls. The test sends a bot from the
 first camp to the top with base stats and no upgrades, and fails if there is a gap it cannot
-cross. It also checks the balance with three climbers: an expert (half a second per hold, no
-upgrades) must finish, an average climber (1.6 s per hold) must fail without upgrades, and the same
+cross. Climbers knocked off by a hazard try again and stop lingering there, as a person would. It
+also checks the balance with three climbers: an expert (half a second per hold, no
+upgrades) must finish, an average climber (1.6 s per hold) must run out of grip without upgrades, and the same
 average climber buying upgrades with the chalk found on the way must finish. Run it after changing
 physics constants, district settings or seeds.
 
-What has been checked: the whole story tower, the daily towers up to late May 2028, and the first
-60 segments (about 30 km) of the endless climb. Beyond that the endless wall follows the same
+What has been checked: the whole story tower (about 171 km), the five New Game+ remixes, the daily
+towers up to late May 2028, and the first 60 segments (about 29 km) of the endless climb. Beyond that the endless wall follows the same
 rules but has not been climbed by the bot.
 
 ## Tuning

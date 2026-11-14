@@ -3,7 +3,7 @@
   'use strict';
   var S = window.Spire, C = S.C, R = S.Render, A = S.Audio, ST = S.Story;
   var $ = function (id) { return document.getElementById(id); };
-  var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', KEY_E = 'spire.endless.v1', WORLD_V = 5;
+  var KEY = 'spire.save.v1', KEY_D = 'spire.daily.v1', KEY_E = 'spire.endless.v1', WORLD_V = 6;
   var STEER_PX = 70;          // finger travel for full glide steering
 
   // baseWorld is the story tower everyone starts on (and challenges use); mainWorld is the tower of the
@@ -47,6 +47,13 @@
           var mv = function (i) { return i < 4 ? i : i < 12 ? i + 4 : i + 8; }, rk = function (o) { var n = {}; for (var k in o) n[mv(+k)] = o[k]; return n; };
           s.camp = mv(s.camp || 0); s.maxCamp = mv(s.maxCamp || 0); s.visited = rk(s.visited || {}); s.seen = rk(s.seen || {});
           for (var q = 0; q < s.maxCamp; q++) { s.visited[q] = 1; s.seen[q] = 1; }    // the new camps you passed in spirit
+        }
+        if ((s.wv || 0) < 6) {        // waystations were added between camps: camp k of a district moved to 2k
+          var mv2 = function (i) { if (i >= 24) return 48; var d = Math.floor(i / 4), k = i % 4; return d * 8 + (d === 5 && k === 3 ? 7 : 2 * k); };
+          var rk2 = function (o) { var n = {}; for (var k in o) n[mv2(+k)] = o[k]; return n; };
+          s.camp = mv2(s.camp || 0); s.maxCamp = mv2(s.maxCamp || 0); s.visited = rk2(s.visited || {}); s.seen = rk2(s.seen || {});
+          for (var q2 = 0; q2 < s.maxCamp; q2++) { s.visited[q2] = 1; s.seen[q2] = 1; }
+          s.fallSeg = {};
         }
         if (s.wv !== WORLD_V) { s.taken = {}; s.marks = []; s.cp = null; s.wv = WORLD_V; }   // the tower layout changed
         return s;
@@ -224,10 +231,10 @@
         save.hints[k] = 1; toastT = 0; toast(ST.hints[k], 7);
       } else if (idx === 0) {
         hint(save.set.sling ? 'start_sling' : 'start_swipe', true);
-      } else if (idx === 2) { hint('piton', true); }
+      } else if (c.hint) { hint(c.hint, true); }
       persist();
       if (idx === world.camps.length - 1) { ending(); return; }
-      if (idx === 1) { openCamp(); return; }
+      if (c.openShop) { openCamp(); return; }
       resume();
     };
     var afterChoice = function () { if (c.outro) talk(c.outro, finish); else finish(); };

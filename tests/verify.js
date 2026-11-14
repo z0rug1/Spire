@@ -100,7 +100,8 @@ function climb(world, opt) {
     return null;
   }
 
-  const res = { ok: false, leaps: 0, tight: [], minLand: 1e9, ways: [], waited: 0, sim, bought: [], chalk: 0 };
+  const burned = new Set();      // holds where lingering got the climber knocked off
+  const res = { ok: false, leaps: 0, tight: [], minLand: 1e9, ways: [], waited: 0, sim, bought: [], chalk: 0, knocks: 0 };
   const summit = world.camps[world.camps.length - 1].hold;
   // opt.think: seconds the climber spends aiming on every hold (a bot decides instantly, a person does not).
   // opt.shop: spend the chalk picked up along the way on upgrades at each camp, in a sensible order.
@@ -131,18 +132,26 @@ function climb(world, opt) {
     }
     if (think > 0 && h.type !== 'ledge' && h.type !== 'camp') {
       // nobody lingers on a hold that is about to vanish or go live
-      const hurry = h.type === 'phase' || h.type === 'crumble' || h.type === 'timed' || (h.type === 'plate' && h.elec);
+      const hurry = h.type === 'phase' || h.type === 'crumble' || h.type === 'timed' || (h.type === 'plate' && h.elec) || burned.has(h.id);
       const n = Math.round((hurry ? 0 : think) / C.DT);
       for (let i = 0; i < n && sim.p.state === 'hold'; i++) S.step(sim, C.DT);
+      if ((sim.p.state !== 'hold' || sim.p.hold !== h.id) && sim.p.stamina > 0.5 && res.knocks < 300) {
+        // knocked off by a hazard while aiming: a person would just try again, so carry on from wherever it ends
+        res.knocks++; burned.add(h.id);         // and next time, not linger here
+        for (let i = 0; i < 1200 && sim.p.state !== 'hold' && sim.p.state !== 'dead'; i++) S.step(sim, C.DT);
+        if (sim.p.state !== 'hold') S.respawn(sim);
+        sim.events.length = 0;
+        continue;
+      }
       if (sim.p.state !== 'hold' || sim.p.hold !== h.id) {
-        res.stuck = `grip gave out while aiming on a ${h.type} in ${S.DISTRICTS[h.d].name} (segment ${h.seg}, ${Math.round(h.y * C.M_PER_UNIT)} m)`;
+        res.stuck = `${sim.p.stamina <= 0.5 ? 'grip gave out' : 'knocked off too often, last time'} while aiming on a ${h.type} in ${S.DISTRICTS[h.d].name} (segment ${h.seg}, ${Math.round(h.y * C.M_PER_UNIT)} m)`;
         return res;
       }
     }
     const d = decide(sim);
     if (!d) {
       const next = mainHolds[h.main + 1];
-      res.stuck = `${S.DISTRICTS[h.d].name}, segment ${h.seg}, ${Math.round(h.y * C.M_PER_UNIT)} m: hold #${h.id} (${h.type}, seg ${h.seg}, y ${h.y.toFixed(0)}), grip ${sim.p.stamina.toFixed(0)}; next: ${next && next.type} at ${next && Math.round(next.x)},${next && Math.round(next.y)}`;
+      res.stuck = (sim.p.stamina < 25 ? 'grip gave out: too little left for the next move, ' : '') + `${S.DISTRICTS[h.d].name}, segment ${h.seg}, ${Math.round(h.y * C.M_PER_UNIT)} m: hold #${h.id} (${h.type}, seg ${h.seg}, y ${h.y.toFixed(0)}), grip ${sim.p.stamina.toFixed(0)}; next: ${next && next.type} at ${next && Math.round(next.x)},${next && Math.round(next.y)}`;
       return res;
     }
     for (let i = 0; i < Math.round(d.wait / C.DT); i++) S.step(sim, C.DT);
@@ -152,19 +161,21 @@ function climb(world, opt) {
     res.minLand = Math.min(res.minLand, sim.p.stamina);
     if (d.solutions < 4) res.tight.push(`#${h.id} ${h.type} -> #${hh.id} ${hh.type} (seg ${h.seg}, ${d.solutions} ways, wait ${d.wait.toFixed(1)}s)`);
     if (verbose && !opt.quiet) console.log(`${h.type.padEnd(8)} -> ${hh.type.padEnd(8)} seg ${String(h.seg).padStart(2)}  ${d.a.script.padEnd(7)} wait ${d.wait.toFixed(1)}  ways ${String(d.solutions).padStart(3)}  grip ${sim.p.stamina.toFixed(0)}${sim.rise.on ? '  slag ' + Math.round(sim.p.y - sim.rise.level) + ' below' : ''}`);
-    if (res.leaps > 4000) { res.stuck = 'too many leaps'; return res; }
+    if (res.leaps > 20000) { res.stuck = 'too many leaps'; return res; }
   }
   res.ok = true;
   return res;
 }
 
 /* ---------- main tower ---------- */
+const EXPERT = 0.5, AVERAGE = 1.6;
+if (!args.includes('--no-main')) mainTower();
+function mainTower() {
 const t0 = Date.now();
 const world = S.generate(C.SEED, S.MAIN_PLAN, { lore: true });
 // Three climbers. The expert aims in half a second and buys nothing: if they can finish, nobody can
 // get stuck for good. The average climber takes 1.6 s per hold: without upgrades they must fail (so
 // upgrades matter), and buying upgrades with the chalk found on the way they must finish.
-const EXPERT = 0.5, AVERAGE = 1.6;
 const r = climb(world, { think: EXPERT });
 if (!r.ok) { console.error('MAIN TOWER: an expert with no upgrades is STUCK at ' + r.stuck); process.exit(1); }
 const avgBare = climb(world, { think: AVERAGE, quiet: true });
@@ -187,10 +198,12 @@ if (r.tight.length) { console.log(`  tight spots (${r.tight.length}):`); r.tight
 console.log(`  checked in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 console.log('Balance:');
 console.log(`  expert, no upgrades          : finishes (lowest grip on landing ${r.minLand.toFixed(0)})`);
-console.log(`  average pace, no upgrades    : ${avgBare.ok ? 'FINISHES, so upgrades are not needed' : 'fails: ' + avgBare.stuck}`);
+console.log(`  average pace, no upgrades    : ${avgBare.ok ? 'FINISHES, so upgrades are not needed' : 'fails: ' + avgBare.stuck} (knocked off ${avgBare.knocks} times on the way)`);
 console.log(`  average pace, buying upgrades: ${avgShop.ok ? `finishes (lowest grip on landing ${avgShop.minLand.toFixed(0)}, ${avgShop.chalk} chalk found, ${avgShop.bought.length} upgrades)` : 'FAILS: ' + avgShop.stuck}`);
 if (avgShop.bought.length) console.log('    bought: ' + avgShop.bought.join(', '));
-if (avgBare.ok || !avgShop.ok) process.exit(1);
+if (avgBare.ok || !avgShop.ok || !/grip gave out/.test(avgBare.stuck)) process.exit(1);   // without upgrades it must be grip that fails
+
+}
 
 /* ---------- daily towers ---------- */
 const nDaily = +arg('--daily') || 0;
@@ -232,10 +245,18 @@ if (nEnd) {
 /* ---------- New Game+ towers ---------- */
 const nNg = +arg('--ng') || 0;
 for (let lv = 1; lv <= nNg; lv++) {
-  const t3 = Date.now(), w = S.generate(S.ngSeed(lv), S.ngPlan(lv), { lore: true });
-  // New Game+ keeps your upgrades. Check it with fewer than an average climber buys in one playthrough (9).
+  // New Game+ keeps your upgrades. Check it with fewer than an average climber buys in one playthrough.
   const NG_UPG = { hands: 2, lungs: 2, legs: 1 };
-  const rn = climb(w, { think: EXPERT, drainK: S.ngDrain(lv), allTools: true, quiet: true, upg: NG_UPG });
+  let t3 = Date.now(), w = S.generate(S.ngSeed(lv), S.ngPlan(lv), { lore: true });
+  let rn = climb(w, { think: EXPERT, drainK: S.ngDrain(lv), allTools: true, quiet: true, upg: NG_UPG });
+  // --salt: try other remixes for this round, to paste into NG_SALT in js/core.js
+  while (!rn.ok && args.includes('--salt') && (S.NG_SALT[lv] || 0) < 6) {
+    console.log(`  New Game+ ${lv} with salt ${S.NG_SALT[lv] || 0}: stuck at ${rn.stuck}`);
+    S.NG_SALT[lv] = (S.NG_SALT[lv] || 0) + 1;
+    w = S.generate(S.ngSeed(lv), S.ngPlan(lv), { lore: true });
+    rn = climb(w, { think: EXPERT, drainK: S.ngDrain(lv), allTools: true, quiet: true, upg: NG_UPG });
+    if (rn.ok) console.log(`  salt needed: NG_SALT[${lv}] = ${S.NG_SALT[lv]}`);
+  }
   if (!rn.ok) { console.error(`New Game+ ${lv}: STUCK at ${rn.stuck}`); process.exit(1); }
   console.log(`New Game+ ${lv}: climbable by an expert with 5 of the 15 upgrades, ${Math.round(w.top * C.M_PER_UNIT)} m, ${rn.leaps} leaps (${((Date.now() - t3) / 1000).toFixed(0)} s)`);
 }

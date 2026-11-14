@@ -147,6 +147,46 @@
     ] }
   ];
 
+  // The tower is long: between the camps above stand waystations, quiet ledges with a line or two.
+  camps[1].openShop = true;          // Drip Market explains chalk, so its shop opens on arrival
+  camps[2].hint = 'piton';           // Hask hands over pitons at the Long Ladder
+  var WAY = [
+    [['Moss Hollow', 'A hollow full of soft green moss. Somebody slept here once and carved a tally on the wall: forty-one days.'],
+     ['Lantern Well', 'An old shaft with a lantern hung halfway down. Its oil is fresh. Someone in the Roots still tends it.'],
+     ['Spore Stair', 'The fungus here glows brighter the higher you go. Below you, the farm lights are pinpricks.'],
+     ['Rootknot', 'The last of the brick. Above, black wet stone, and the sound of water behind it.']],
+    [['Tank Nine', 'A painted number on a tank the size of a house. Your hand on the stone: it is cold, and full.'],
+     ['Drip Ledge', 'Water beads on everything. For the first time since you left the farm, you drink as much as you like.'],
+     ['Sluice Walk', 'A catwalk between two sluices. One is painted with a Crown sign so old the gold has gone green.'],
+     ['The Weir', 'The water roars somewhere inside the wall. Above, the stone turns to iron.']],
+    [['Cinder Bench', 'A bench bolted to the wall for furnace-hands on their break. Someone left half a loaf for whoever comes next.'],
+     ['Gearwell', 'A gear as tall as a house turns slowly behind a grate. Nobody seems to know what it drives.'],
+     ['Rivet Row', 'Ten thousand rivets, each one stamped with a rigger\'s mark. Tallow\'s grandmother\'s is here.'],
+     ['Bellows Shelf', 'The last of the smoke. Above you, white stone, and a smell like rain on leaves.']],
+    [['Trellis Rest', 'Roses grow up the outside of the tower here, wild and unpruned. The gardeners never look outside.'],
+     ['Pollen Walk', 'Bees. Real bees, humming in and out of a crack in the stone. Someone up here keeps hives.'],
+     ['Fountain Ledge', 'A fountain runs into a basin and the basin runs straight off the edge. All that water, falling past the Works.'],
+     ['Rose Arch', 'The last of the gardens. Above, the walls turn to shelves, and the air smells of ink.']],
+    [['Index Shelf', 'A shelf of indexes to other indexes. You find your own family name, and a ration number beside it.'],
+     ['Ink Well', 'A cistern of ink, enough to write orders for a thousand years.'],
+     ['Folio Stair', 'Loose pages drift down past you. Every one begins: By order of the Crown.'],
+     ['Margin', 'The last shelf. Someone has scratched in the wood: who writes the drafts?']],
+    [['Thin Air', 'Every breath is shallow. Your fingers ache with cold. The lights of the whole tower are far below.'],
+     ['Frost Ledge', 'Frost on the steel. A boot print in it, very old, pointing down.'],
+     ['Star Shelf', 'Above the clouds now. More stars than you have ever seen, and no one to show them to.'],
+     ['The Long Quiet', 'No wind, no water, no machines. Only your breathing and the Crown, close above.']]
+  ];
+  (function () {
+    var out = [], g, k, w = function (x) { return { name: x[0], waystation: true, lines: [['', x[1]]] }; };
+    for (g = 0; g < 6; g++) {
+      var c = camps.slice(g * 4, g * 4 + 4), wy = WAY[g];
+      if (g < 5) out.push(c[0], w(wy[0]), c[1], w(wy[1]), c[2], w(wy[2]), c[3], w(wy[3]));
+      else out.push(c[0], w(wy[0]), c[1], w(wy[1]), c[2], w(wy[2]), w(wy[3]), c[3]);   // Last Light stays the last camp before the summit
+    }
+    out.push(camps[24]);
+    camps = out;
+  })();
+
   var hints = {
     start_swipe: 'Drag in the direction you want to leap, then let go.',
     start_sling: 'Pull back like a billiards cue, then let go. The dotted arc shows your leap.',
@@ -173,7 +213,7 @@
     timed: 'These holds only answer a bell. Ring it by leaping off it, then climb before they fade.',
     key: 'A key. Somewhere above, a strongbox will open for it.',
     box: 'A strongbox. Bring a key and it opens.',
-    switch: 'A sluice lever. Grabbing it flips which colour of hold is solid, blue or amber.',
+    switch: 'A sluice lever. Grabbing it sets which colour of hold is solid, blue or amber: the colour its handle swings to.',
     gate: 'Faded holds only take your weight while their colour runs. Find the lever.',
     biv: 'A bivouac. Your climb is saved here too.',
     piton: 'Tap the piton button on a hold to set a checkpoint there.',
